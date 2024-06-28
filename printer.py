@@ -1,45 +1,55 @@
 ﻿import re
 import markdown
 
+from collections import namedtuple
+
 from crawler import ObsidianNote
+from anki_handler import CSS_WIKILINK, CSS_HIGHLIGHT
 
 
-def convert_to_note(obn: ObsidianNote):
-    front, back = '', ''
-    if len(obn) == 1:
-        front = convert_to_html(obn.questions[0])
-        back = convert_to_html(obn.answers[0])
-    else:
-        for i, (q, ans) in enumerate(zip(obn.questions, obn.answers)):
-            front += f'<h1>Q{i}</h1><hr>\n' + convert_to_html(q, True)
-            back  += f'<h1>R{i}</h1><hr>\n' + convert_to_html(ans, True)
-
-    note = {
-        'deckName': obn.deck,
-        'modelName': 'Basic',
-        'tags': [
-            obn.tag
-        ],
-        'fields': {
-            'Front': front,
-            'Back': back,
-        }
-    }
-
-    return note
+# def convert_to_note(obn: ObsidianNote):
+#     front, back = '', ''
+#     if len(obn) == 1:
+#         front = convert_to_html(obn.questions[0])
+#         back = convert_to_html(obn.answers[0])
+#     else:
+#         for i, (q, ans) in enumerate(zip(obn.questions, obn.answers)):
+#             front += f'<h1>Q{i}</h1><hr>\n' + convert_to_html(q, True)
+#             back += f'<h1>R{i}</h1><hr>\n' + convert_to_html(ans, True)
+#
+#     note = {
+#         'deckName': obn.deck,
+#         'modelName': 'Basic',
+#         'tags': [
+#             obn.tag
+#         ],
+#         'fields': {
+#             'Front': front,
+#             'Back': back,
+#         }
+#     }
+#
+#     return note
 
 
 def convert_to_html(text, lower_headings=False):
     text = _replace_link(text)
+    text = _replace_strikethrough(text)
     text = _remove_tags(text)
-    text = _remove_hr(text)
     if lower_headings:
+        text = _remove_hr(text)
         text = _lower_headings(text)
     text = _safe_headings(text)
     text = _safe_lists(text)
     text = _replace_mathjax(text)
     text = _replace_highlight(text)
-    return markdown.markdown(text)
+    return markdown.markdown(text, extensions=['tables', 'sane_lists'])
+
+
+def _replace_strikethrough(text):
+    def repl(m):
+        return f'<s>{m.group(1)}</s>'
+    return re.sub(r'~~(.*?)~~', repl, text, flags=re.MULTILINE)
 
 
 def _remove_tags(text):
@@ -53,6 +63,7 @@ def _remove_hr(text):
 def _lower_headings(text):
     def repl(m):
         return '#' + m.group(1) + m.group(2) + '\n'
+
     return re.sub(r'^(#+)( +.*?)\n', repl, text, flags=re.MULTILINE)
 
 
@@ -120,7 +131,8 @@ def _replace_mathjax(text):
 
 def _replace_highlight(text):
     def repl(m):
-        return f'<span style="background-color: rgb(255, 255, 0);">{m.group(1)}</span>'
+        return f'<span class="{CSS_HIGHLIGHT.name}">{m.group(1)}</span>'
+
     return re.sub(r'==(.*?)==', repl, text)
 
 
@@ -131,7 +143,8 @@ def _replace_link(text):
             link = link.split('|')[0]
         if '#' in link:
             link = link.split('#')[0]
-        return f'<span style="color: rgb(0, 85, 255);">{link}</span>'
+        return f'<span class="{CSS_WIKILINK.name}">{link}</span>'
+
     return re.sub(r'\[\[(.*?)]]', repl, text)
 
 
@@ -143,7 +156,7 @@ def _main():
     vault_notes = vault_crawler(db)
 
     for i, note in enumerate(vault_notes):
-        print(f'{i+1}/{len(vault_notes)}: {note.deck}/{note.tag}')
+        print(f'{i + 1}/{len(vault_notes)}: {note.deck}/{note.tag}')
         if note.questions is None:
             print('\t INVALID NOTE')
             continue

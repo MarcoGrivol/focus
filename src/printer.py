@@ -1,38 +1,39 @@
 ﻿import re
+from typing import Tuple, List
+from xml.etree import ElementTree as ET
 import markdown
 
-from collections import namedtuple
-
-from crawler import ObsidianNote
 from anki_handler import CSS_WIKILINK, CSS_HIGHLIGHT
 
 
-# def convert_to_note(obn: ObsidianNote):
-#     front, back = '', ''
-#     if len(obn) == 1:
-#         front = convert_to_html(obn.questions[0])
-#         back = convert_to_html(obn.answers[0])
-#     else:
-#         for i, (q, ans) in enumerate(zip(obn.questions, obn.answers)):
-#             front += f'<h1>Q{i}</h1><hr>\n' + convert_to_html(q, True)
-#             back += f'<h1>R{i}</h1><hr>\n' + convert_to_html(ans, True)
-#
-#     note = {
-#         'deckName': obn.deck,
-#         'modelName': 'Basic',
-#         'tags': [
-#             obn.tag
-#         ],
-#         'fields': {
-#             'Front': front,
-#             'Back': back,
-#         }
-#     }
-#
-#     return note
+def note_to_webview(fields: List[Tuple[str, str]]):
+    front, back = '', ''
+    if len(fields) == 1:
+        q, ans = fields[0]
+        front = text_to_html(q)
+        back = text_to_html(ans)
+    else:
+        for i, (q, ans) in enumerate(fields):
+            front += f'<h1>Q{i}</h1><hr>\n' + text_to_html(q, True)
+            back += f'<h1>R{i}</h1><hr>\n' + text_to_html(ans, True)
+    root = ET.Element('')
+    return front, back
 
 
-def convert_to_html(text, lower_headings=False):
+def note_to_html(fields: List[Tuple[str, str]]):
+    front, back = '', ''
+    if len(fields) == 1:
+        q, ans = fields[0]
+        front = text_to_html(q)
+        back = text_to_html(ans)
+    else:
+        for i, (q, ans) in enumerate(fields):
+            front += f'<h1>Q{i}</h1><hr>\n' + text_to_html(q, True)
+            back += f'<h1>R{i}</h1><hr>\n' + text_to_html(ans, True)
+    return front, back
+
+
+def text_to_html(text, lower_headings=False):
     text = _replace_link(text)
     text = _replace_strikethrough(text)
     text = _remove_tags(text)
@@ -140,9 +141,9 @@ def _replace_link(text):
     def repl(m):
         link = m.group(1)
         if '|' in link:
-            link = link.split('|')[0]
+            link = link.split('|')[1]
         if '#' in link:
-            link = link.split('#')[0]
+            link = link.split('#')[1]
         return f'<span class="{CSS_WIKILINK.name}">{link}</span>'
 
     return re.sub(r'\[\[(.*?)]]', repl, text)

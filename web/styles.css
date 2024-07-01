@@ -1,0 +1,16 @@
+﻿
+.card {
+    font-family: arial;
+    font-size: 20px;
+    text-align: center;
+    color: black;
+    background-color: white;
+}
+
+.wikilink {
+    color: rgb(0, 85, 255);
+}
+
+.highlight {
+    background-color: rgb(255, 255, 0);
+}

@@ -22,10 +22,9 @@ CSS_CALLOUT = Style('callout', '.callout { margin-left: 5px; max-width: 500px; }
 CSS_CALLOUT_HEADER = Style('callout-header',
                             '.callout-header {'
                                 'padding: 5px 10px 10px 10px;'
-                                'background: #ecf4fc;'
                                 'font-weight: 600;'
                                 'border-top: 1px solid black;'
-                                'border-left: 1px solid black;'
+                                'border-left: 5px solid;'
                                 'border-right: 1px solid black;'
                                 'border-top-left-radius: 7px;'
                                 'border-top-right-radius: 7px;'
@@ -34,15 +33,27 @@ CSS_CALLOUT_HEADER = Style('callout-header',
 CSS_CALLOUT_BODY = Style('callout-body',
                          '.callout-body {'
                             'padding: 1px 10px 1px 10px;'
-                            'background-color: rgba(236, 244, 252, 0.25);'
+                            'background-color: #fafafa;'
                             'color: black;'
-                            'border-left: 1px solid black;'
+                            'border-left: 5px solid;'
                             'border-bottom: 1px solid black;'
                             'border-right: 1px solid black;'
                             'border-bottom-left-radius: 7px;'
                             'border-bottom-right-radius: 7px;'
                          '}'
 )
+CSS_CALLOUT_HEADER_COLORS = {
+    'note': 'background: #e6f0fb; border-left-color: #0094fd; color: #086ddd',
+    'info': 'background: #e6f0fb; border-left-color: #0094fd; color: #086ddd',
+    'warning': 'background: #fdf1e5; border-left-color: #ec7500; color: #ec7500',
+    'danger': 'background: #fdeaec; border-left-color: #e93147; color: #e93147'
+}
+CSS_CALLOUT_BODY_COLORS = {
+    'note': 'border-left-color: #0094fd; ',
+    'info': 'border-left-color: #0094fd;',
+    'warning': 'border-left-color: #ec7500;',
+    'danger': 'border-left-color: #e93147;',
+}
 
 
 def get_styling():
@@ -192,12 +203,17 @@ def _replace_mathjax(text):
 
 def _replace_callout(text):
     def repl(m):
-        color = ''
+        key = m.group(1) if m.group(1) in CSS_CALLOUT_BODY_COLORS else 'info'
+        header_style = CSS_CALLOUT_HEADER_COLORS[key]
+        body_style = CSS_CALLOUT_BODY_COLORS[key]
+
         callout = f'<div class="{CSS_CALLOUT.name}">'
-        callout += f'<div class="{CSS_CALLOUT_HEADER.name}">{m.group(2)}</div>'
-        callout += f'<div class="{CSS_CALLOUT_BODY.name}">{m.group(3)}</div>'
+        callout += f'<div class="{CSS_CALLOUT_HEADER.name}" style="{header_style}">{m.group(2)}</div>'
+        callout += f'<div class="{CSS_CALLOUT_BODY.name}" style="{body_style}">{m.group(3)}</div>'
         callout += '</div>'
+
         return callout
+
     return re.sub(r'> *\[!(\w+)] +(.*?)\n(?:> *(.*)?\n)+', repl, text)
 
 

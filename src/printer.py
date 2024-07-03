@@ -18,7 +18,7 @@ CSS_CARD = Style('card',
 )
 CSS_WIKILINK = Style('wikilink', '.wikilink { color: rgb(0, 85, 255); }')
 CSS_HIGHLIGHT = Style('highlight', '.highlight { background-color: rgb(255, 255, 0); }')
-CSS_CALLOUT = Style('callout', '.callout { margin-left: 5px; max-width: 500px; }')
+CSS_CALLOUT = Style('callout', '.callout { margin-left: auto; margin-right: auto; max-width: 500px; }')
 CSS_CALLOUT_HEADER = Style('callout-header',
                             '.callout-header {'
                                 'padding: 5px 10px 10px 10px;'
@@ -42,6 +42,15 @@ CSS_CALLOUT_BODY = Style('callout-body',
                             'border-bottom-right-radius: 7px;'
                          '}'
 )
+CSS_BLOCKQUOTE = Style('blockquote',
+                        'blockquote {'
+                            'max-width: 75%;'
+                            'background-color: #ebebeb;'
+                            'padding: 4px;'
+                            'border-left: 5px solid #a68cda;'
+                            'border-radius: 5px;'
+                        '}'
+)
 CSS_CALLOUT_HEADER_COLORS = {
     'note': 'background: #e6f0fb; border-left-color: #0094fd; color: #086ddd',
     'info': 'background: #e6f0fb; border-left-color: #0094fd; color: #086ddd',
@@ -63,6 +72,7 @@ def get_styling():
     styling += CSS_CALLOUT.css + '\n'
     styling += CSS_CALLOUT_HEADER.css + '\n'
     styling += CSS_CALLOUT_BODY.css + '\n'
+    styling += CSS_BLOCKQUOTE.css
     return styling
 
 
@@ -108,8 +118,8 @@ def text_to_html(text, lower_headings=False, web=False):
     text = _safe_lists(text)
     text = _replace_highlight(text)
     text = _replace_anki_mathjax(text)
-    text = _replace_callout(text)
     text = markdown.markdown(text, extensions=['tables', 'sane_lists'])
+    text = _replace_callout(text)
     if web:
         text = _replace_mathjax(text)
     return text
@@ -204,17 +214,37 @@ def _replace_mathjax(text):
 def _replace_callout(text):
     def repl(m):
         key = m.group(1) if m.group(1) in CSS_CALLOUT_BODY_COLORS else 'info'
+
+        header_name = CSS_CALLOUT_HEADER.name
+        body_name = CSS_CALLOUT_BODY.name
+
         header_style = CSS_CALLOUT_HEADER_COLORS[key]
         body_style = CSS_CALLOUT_BODY_COLORS[key]
 
         callout = f'<div class="{CSS_CALLOUT.name}">'
+        callout += f'<div class="{header_name}" style="{header_style}">{m.group(2)}</div>'
+        callout += f'<div class="{body_name}" style="{body_style}"><p>{m.group(3)}</div>'
+        callout += '</div>'
+        return callout
+    return re.sub(r'<blockquote>\s*<p>\[!(\w+)] *(.*)([\s\S]*)</blockquote>', repl, text, flags=re.MULTILINE)
+
+
+def _replace_callout1(text, web):
+    def repl(m):
+        key = m.group(1) if m.group(1) in CSS_CALLOUT_BODY_COLORS else 'info'
+        header_style = CSS_CALLOUT_HEADER_COLORS[key]
+        body_style = CSS_CALLOUT_BODY_COLORS[key]
+
+        body_text = text_to_html(m.group(3), web)
+
+        callout = f'<div class="{CSS_CALLOUT.name}">'
         callout += f'<div class="{CSS_CALLOUT_HEADER.name}" style="{header_style}">{m.group(2)}</div>'
-        callout += f'<div class="{CSS_CALLOUT_BODY.name}" style="{body_style}">{m.group(3)}</div>'
+        callout += f'<div class="{CSS_CALLOUT_BODY.name}" style="{body_style}">{body_text}</div>'
         callout += '</div>'
 
         return callout
 
-    return re.sub(r'> *\[!(\w+)] +(.*?)\n(?:> *(.*)?\n)+', repl, text)
+    return re.sub(r'> *\[!(\w+)] +(.*?)\n((?:> *.*\n)+)', repl, text)
 
 
 def _replace_highlight(text):

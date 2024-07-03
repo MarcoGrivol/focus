@@ -3,7 +3,7 @@ import time
 import webbrowser
 
 from abc import ABC, abstractmethod
-from typing import Callable
+from typing import Callable, List
 from tkinter import ttk
 from tkinter import messagebox
 
@@ -16,60 +16,76 @@ RATIO_THRESHOLD_WARNING = 0.95
 
 
 class AppStep(ABC):
-    def __init__(self, mainframe: ttk.Frame):
-        self.mainframe = mainframe
+    def __init__(self, mainframe: ttk.Frame, f_back, f_cancel, f_continue, mbox_window):
+        self._mainframe = mainframe
 
-        self.buttons_frame = ttk.Frame(self.mainframe)
-        self.contents_frame = ttk.Frame(self.mainframe)
+        self._buttons_frame = None
+        self._contents_frame = None
+        self._mbox_window = mbox_window
 
-        self.continue_func = None
-        self.cancel_func = None
-        self.back_func = None
-
-        self.messagebox_window = None
+        self._continue_func = f_continue
+        self._cancel_func = f_cancel
+        self._back_func = f_back
 
     def mainloop(self):
+        self._contents_frame = ttk.Frame(self._mainframe)
+        self._buttons_frame = ttk.Frame(self._mainframe)
+
         self.build_contents()
         self.build_buttons()
 
-        self.contents_frame.grid(column=0, row=0, sticky='NEWS')
-        self.buttons_frame.grid(column=0, row=1, sticky='WE')
+        self._contents_frame.grid(column=0, row=0, sticky='NEWS')
+        self._buttons_frame.grid(column=0, row=1, sticky='WE')
 
-        self.mainframe.columnconfigure(0, weight=1)
-        self.mainframe.rowconfigure(0, weight=1)
+        self._mainframe.columnconfigure(0, weight=1)
+        self._mainframe.rowconfigure(0, weight=1)
 
     def set_continue(self, func: Callable):
-        self.continue_func = func
+        self._continue_func = func
 
     def set_cancel(self, func: Callable):
-        self.cancel_func = func
+        self._cancel_func = func
 
     def set_back(self, func: Callable):
-        self.back_func = func
+        self._back_func = func
 
     def set_messagebox_window(self, window):
-        self.messagebox_window = window
+        self._mbox_window = window
 
     @abstractmethod
     def build_contents(self):
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def build_buttons(self):
-        pass
+        raise NotImplementedError
+
+    @abstractmethod
+    def pass_forward(self):
+        raise NotImplementedError
+
+    @abstractmethod
+    def receive_message(self, message: object):
+        raise NotImplementedError
 
 
 class FirstStep(AppStep):
-    def __init__(self, mainframe: ttk.Frame):
-        super().__init__(mainframe)
-        self.crawler: VaultCrawler | None = None
+    def __init__(self, mainframe: ttk.Frame, f_back, f_cancel, f_continue, mbox_window):
+        super().__init__(mainframe, f_back, f_cancel, f_continue, mbox_window)
+        self._crawler: VaultCrawler | None = None
+
+    def receive_message(self, message: VaultCrawler):
+        self._crawler = message
+
+    def pass_forward(self):
+        return self._crawler
 
     def build_contents(self):
-        root = self.contents_frame
+        root = self._contents_frame
 
         treeview = ttk.Treeview(root, columns=['counter', 'anki_status'])
 
-        tree = self.crawler.build_filetree()
+        tree = self._crawler.build_filetree()
 
         vid = treeview.insert('', 'end', text='Valid Anki files', values=[count_leaves(tree['valid_files']), ''])
         iid = treeview.insert('', 'end', text='Invalid Anki files', values=[count_leaves(tree['invalid_files']), ''])
@@ -89,10 +105,10 @@ class FirstStep(AppStep):
         root.rowconfigure(0, weight=1)
 
     def build_buttons(self):
-        root = self.buttons_frame
+        root = self._buttons_frame
 
-        b_continue = ttk.Button(root, text='continue', command=self.continue_func)
-        b_cancel = ttk.Button(root, text='cancel', command=self.cancel_func)
+        b_continue = ttk.Button(root, text='continue', command=self._continue_func)
+        b_cancel = ttk.Button(root, text='cancel', command=self._cancel_func)
         b_refresh = ttk.Button(root, text='refresh', command=self.refresh)
 
         b_refresh.grid(column=0, row=0, sticky='W')
@@ -102,26 +118,50 @@ class FirstStep(AppStep):
         root.columnconfigure(0, weight=1)
 
     def refresh(self):
-        for i in self.contents_frame.winfo_children():
+        for i in self._contents_frame.winfo_children():
             i.destroy()
-        self.crawler.reset()
+        self._crawler.reset()
         self.build_contents()
 
 
 class SecondStep(AppStep):
-    def __init__(self, mainframe: ttk.Frame):
-        super().__init__(mainframe)
+    def __init__(self, mainframe: ttk.Frame, f_back, f_cancel, f_continue, mbox_window):
+        super().__init__(mainframe, f_back, f_cancel, f_continue, mbox_window)
 
-        self.crawler: VaultCrawler | None = None
-        self.treeview: ttk.Treeview | None = None
-        self.index_map: Dict[str, int] = {}
+        self._crawler: VaultCrawler | None = None
+        self.selected_notes: List[int] = []
+        self._treeview: ttk.Treeview | None = None
+        self._index_map: Dict[str, int] = {}
+
+    def receive_message(self, message: VaultCrawler):
+        self._crawler = message
+
+    def pass_forward(self) -> list[AnkiNote]:
+        return [self._crawler.valid_notes[i] for i in self.selected_notes]
+
+    def refresh(self) -> None:
+        for i in self._contents_frame.winfo_children():
+            i.destroy()
+        self.build_contents()
+
+    def continue_with_selection(self):
+        self.selected_notes = self.selected_items(self._treeview.selection())
+        if len(self.selected_notes) == 0:
+            messagebox.showerror(
+                'Invalid selection',
+                'Please select at least one valid note to continue',
+                parent=self._mbox_window,
+                icon='warning'
+            )
+            return
+        self._continue_func()
 
     def build_buttons(self):
-        b_continue = ttk.Button(self.buttons_frame, text='continue', command=self.continue_with_selection)
-        b_cancel = ttk.Button(self.buttons_frame, text='cancel', command=self.cancel_func)
-        b_back = ttk.Button(self.buttons_frame, text='back', command=self.back_func)
-        b_refresh = ttk.Button(self.buttons_frame, text='refresh', command=self.refresh)
-        b_open = ttk.Button(self.buttons_frame, text='open', command=self.open_selection)
+        b_continue = ttk.Button(self._buttons_frame, text='continue', command=self.continue_with_selection)
+        b_cancel = ttk.Button(self._buttons_frame, text='cancel', command=self._cancel_func)
+        b_back = ttk.Button(self._buttons_frame, text='back', command=self._back_func)
+        b_refresh = ttk.Button(self._buttons_frame, text='refresh', command=self.refresh)
+        b_open = ttk.Button(self._buttons_frame, text='open', command=self.open_selection)
 
         b_back.grid(column=0, row=0)
         b_refresh.grid(column=1, row=0, sticky='W')
@@ -129,51 +169,47 @@ class SecondStep(AppStep):
         b_cancel.grid(column=3, row=0)
         b_continue.grid(column=4, row=0)
 
-        self.buttons_frame.columnconfigure(1, weight=1)
-        self.buttons_frame.columnconfigure(2, weight=1)
+        self._buttons_frame.columnconfigure(1, weight=1)
+        self._buttons_frame.columnconfigure(2, weight=1)
 
     def build_contents(self):
-        self.treeview = ttk.Treeview(self.contents_frame, columns=['counter', 'status', 'text'])
+        self._treeview = ttk.Treeview(self._contents_frame, columns=['counter', 'status', 'text'])
 
-        self.crawler.convert_files()
-        v_tree, inv_tree = self.crawler.build_notetree()
+        self._crawler.convert_files()
+        v_tree, inv_tree = self._crawler.build_notetree()
 
-        vid = self.treeview.insert('', 'end', 'valid', text='Valid notes', values=[count_leaves(v_tree), '', ''])
-        iid = self.treeview.insert('', 'end', 'invalid', text='Invalid notes', values=[count_leaves(inv_tree), '', ''])
-        self.index_map = build_notetree_view(self.treeview, vid, v_tree)
-        self.index_map.update(build_notetree_view(self.treeview, iid, inv_tree))
+        vid = self._treeview.insert('', 'end', 'valid', text='Valid notes', values=[count_leaves(v_tree), '', ''])
+        iid = self._treeview.insert('', 'end', 'invalid', text='Invalid notes', values=[count_leaves(inv_tree), '', ''])
+        self._index_map = build_notetree_view(self._treeview, vid, v_tree)
+        self._index_map.update(build_notetree_view(self._treeview, iid, inv_tree))
 
-        self.treeview.heading('#0', text='File')
-        self.treeview.heading('status', text='Status')
-        self.treeview.heading('text', text='Text')
-        self.treeview.heading('counter', text='# of notes')
+        self._treeview.heading('#0', text='File')
+        self._treeview.heading('status', text='Status')
+        self._treeview.heading('text', text='Text')
+        self._treeview.heading('counter', text='# of notes')
 
-        self.treeview.column('status', anchor='center')
-        self.treeview.column('text', anchor='center')
-        self.treeview.column('counter', anchor='center')
+        self._treeview.column('status', anchor='center')
+        self._treeview.column('text', anchor='center')
+        self._treeview.column('counter', anchor='center')
 
-        self.treeview.grid(column=0, row=0, sticky='NEWS')
-        self.contents_frame.columnconfigure(0, weight=1)
-        self.contents_frame.rowconfigure(0, weight=1)
-
-    def refresh(self) -> None:
-        for i in self.contents_frame.winfo_children():
-            i.destroy()
-        self.build_contents()
+        self._treeview.grid(column=0, row=0, sticky='NEWS')
+        self._contents_frame.columnconfigure(0, weight=1)
+        self._contents_frame.rowconfigure(0, weight=1)
 
     def selected_items(self, iid_list):
         notes = []
         for iid in iid_list:
-            tags = self.treeview.item(iid)['tags']
+            tags = self._treeview.item(iid)['tags']
             if 'note' not in tags:
-                notes.extend(self.selected_items(self.treeview.get_children(iid)))
+                notes.extend(self.selected_items(self._treeview.get_children(iid)))
             elif 'valid' in tags:
-                idx = self.index_map[iid]
-                notes.append(self.crawler.valid_notes[idx])
+                idx = self._index_map[iid]
+                notes.append(idx)
         return notes
 
     def open_selection(self):
-        notes = self.selected_items(self.treeview.selection())
+        notes = self.selected_items(self._treeview.selection())
+        notes = [self._crawler.valid_notes[i] for i in notes]
         if len(notes) == 0:
             print('ZERO valid notes selected, nothing to show')
             return
@@ -185,29 +221,24 @@ class SecondStep(AppStep):
 
         webbrowser.open('file:///' + filepath)
 
-    def continue_with_selection(self):
-        notes = self.selected_items(self.treeview.selection())
-        if len(notes) == 0:
-            messagebox.showerror(
-                'Invalid selection',
-                'Please select at least one valid note to continue',
-                parent=self.messagebox_window,
-                icon='warning'
-            )
-            return
-        self.continue_func(notes)
-
 
 class ThirdStep(AppStep):
-    def __init__(self, mainframe: ttk.Frame):
-        super().__init__(mainframe)
+    def __init__(self, mainframe: ttk.Frame, f_back, f_cancel, f_continue, mbox_window):
+        super().__init__(mainframe, f_back, f_cancel, f_continue, mbox_window)
+        self.notes: List[AnkiNote] = []
+        self.selected_notes: List[int] = []
 
         self.is_startup_ok, self.changes = anki_handler.startup()
 
         self.treeview: ttk.Treeview | None = None
-        self.selected_notes: List[AnkiNote] = []
         self.anki_entry: List[anki_handler.AnkiJsonEntry] = []
         self.index_map: Dict[str, int] = {}
+
+    def receive_message(self, message: List[AnkiNote]):
+        self.notes = message
+
+    def pass_forward(self) -> List[anki_handler.AnkiJsonEntry]:
+        return [self.anki_entry[i] for i in self.selected_notes]
 
     def mainloop(self):
         if not self.is_startup_ok:
@@ -215,17 +246,17 @@ class ThirdStep(AppStep):
         super().mainloop()
 
     def build_buttons(self):
-        b_continue = ttk.Button(self.buttons_frame, text='continue', command=self.continue_with_selection)
-        b_cancel = ttk.Button(self.buttons_frame, text='cancel', command=self.cancel_func)
-        b_back = ttk.Button(self.buttons_frame, text='back', command=self.back_func)
-        b_refresh = ttk.Button(self.buttons_frame, text='refresh', command=self.refresh)
+        b_continue = ttk.Button(self._buttons_frame, text='continue', command=self.continue_with_selection)
+        b_cancel = ttk.Button(self._buttons_frame, text='cancel', command=self._cancel_func)
+        b_back = ttk.Button(self._buttons_frame, text='back', command=self._back_func)
+        b_refresh = ttk.Button(self._buttons_frame, text='refresh', command=self.refresh)
 
         b_back.grid(column=0, row=0)
         b_refresh.grid(column=1, row=0, sticky='W')
         b_cancel.grid(column=2, row=0)
         b_continue.grid(column=3, row=0)
 
-        self.buttons_frame.columnconfigure(1, weight=1)
+        self._buttons_frame.columnconfigure(1, weight=1)
 
     def continue_with_selection(self):
         def selected_items(_iid_list):
@@ -238,11 +269,11 @@ class ThirdStep(AppStep):
                     _notes.append(self.index_map[_iid])
             return _notes
 
-        selected_notes = selected_items(self.treeview.selection())
+        self.selected_notes = selected_items(self.treeview.selection())
 
         ratio_exceed = 0
         valid_count = 0
-        for i in selected_notes:
+        for i in self.selected_notes:
             note = self.anki_entry[i]
             if not note.is_valid():
                 continue
@@ -254,7 +285,7 @@ class ThirdStep(AppStep):
             messagebox.showerror(
                 'Invalid selection',
                 'Please select at least one valid note to continue',
-                parent=self.messagebox_window,
+                parent=self._mbox_window,
                 icon='warning'
             )
             return
@@ -265,13 +296,13 @@ class ThirdStep(AppStep):
             response = messagebox.askyesno(
                 'Possible duplicates',
                 msg,
-                parent=self.messagebox_window,
+                parent=self._mbox_window,
                 icon='warning'
             )
             if response is not True:
                 return
 
-        self.continue_func(stored_obj=[self.anki_entry[i] for i in selected_notes])
+        self._continue_func()
 
     def build_contents(self):
         print(f'Started third step build_contents()')
@@ -279,7 +310,7 @@ class ThirdStep(AppStep):
         self.generate_anki_entries()
         self.index_map = {}
 
-        self.treeview = ttk.Treeview(self.contents_frame, columns=['dt', 'status', 'ratio', 'text'])
+        self.treeview = ttk.Treeview(self._contents_frame, columns=['dt', 'status', 'ratio', 'text'])
 
         ok_id = self.treeview.insert('', 'end', 'can_add', text='Can add')
         dup_id = self.treeview.insert('', 'end', 'duplicated', text='Duplicated')
@@ -289,7 +320,7 @@ class ThirdStep(AppStep):
         result = anki_handler.invoke('canAddNotesWithErrorDetail', notes=notes)
 
         for i, res in enumerate(result):
-            print(f'\t ({i + 1})/{len(result)}: {self.selected_notes[i].relative_path} response={res}')
+            print(f'\t ({i + 1})/{len(result)}: {self.notes[i].relative_path} response={res}')
 
             parent, text, values = self.create_treeview(i, res, ok_id, dup_id, err_id)
 
@@ -315,18 +346,18 @@ class ThirdStep(AppStep):
             else:
                 parent = err_id
 
-        text = self.selected_notes[i].relative_path
+        text = self.notes[i].relative_path
         values = [
             note.convert_to_nested_tags(),
             status,
             f'{note.q_ratio:.2f} {note.ans_ratio:.2f}',
-            self.selected_notes[i].text[:48]
+            self.notes[i].text[:48]
         ]
         return parent, text, values
 
     def generate_anki_entries(self):
         self.anki_entry = []
-        for md_note in self.selected_notes:
+        for md_note in self.notes:
             front, back = printer.note_to_html(list(md_note.get_fields()))
             note = anki_handler.AnkiJsonEntry(md_note.deck, front, back, md_note.tags)
             self.anki_entry.append(note)
@@ -344,7 +375,7 @@ class ThirdStep(AppStep):
         message += '\nDo you want to apply the changes?'
 
         response = messagebox.askyesnocancel(
-            parent=self.messagebox_window,
+            parent=self._mbox_window,
             message=message,
             title='Modify',
             icon='warning'
@@ -360,10 +391,10 @@ class ThirdStep(AppStep):
         elif response is False:
             print('WARNING: continuing with wrong settings')
         else:
-            self.cancel_func()
+            self._cancel_func()
 
     def refresh(self):
-        for i in self.contents_frame.winfo_children():
+        for i in self._contents_frame.winfo_children():
             i.destroy()
         self.build_contents()
 
@@ -382,32 +413,38 @@ class ThirdStep(AppStep):
         self.treeview.column('text', width=48)
 
         self.treeview.grid(column=0, row=0, sticky='NEWS')
-        self.contents_frame.columnconfigure(0, weight=1)
-        self.contents_frame.rowconfigure(0, weight=1)
+        self._contents_frame.columnconfigure(0, weight=1)
+        self._contents_frame.rowconfigure(0, weight=1)
 
 
 class FourthStep(AppStep):
-    def __init__(self, mainframe: ttk.Frame):
-        super().__init__(mainframe)
+    def __init__(self, mainframe: ttk.Frame, f_back, f_cancel, f_continue, mbox_window):
+        super().__init__(mainframe, f_back, f_cancel, f_continue, mbox_window)
         self.notes: List[anki_handler.AnkiJsonEntry] = []
         self.results = []
         self.has_errors = False
 
+    def receive_message(self, message: List[anki_handler.AnkiJsonEntry]):
+        self.notes = message
+
+    def pass_forward(self):
+        raise NotImplementedError
+
     def build_buttons(self):
-        b_back = ttk.Button(self.buttons_frame, text='back', command=self.revert_and_back)
-        b_rev_close = ttk.Button(self.buttons_frame, text='revert and close', command=self.revert_and_close)
-        b_close = ttk.Button(self.buttons_frame, text='close', command=self.close)
+        b_back = ttk.Button(self._buttons_frame, text='back', command=self.revert_and_back)
+        b_rev_close = ttk.Button(self._buttons_frame, text='revert and close', command=self.revert_and_close)
+        b_close = ttk.Button(self._buttons_frame, text='close', command=self.close)
 
         b_back.grid(column=0, row=0, sticky='W')
         b_rev_close.grid(column=1, row=0)
         b_close.grid(column=2, row=0)
 
-        self.buttons_frame.columnconfigure(0, weight=1)
+        self._buttons_frame.columnconfigure(0, weight=1)
 
     def build_contents(self):
         self.results = anki_handler.invoke('addNotes', notes=[note.to_json() for note in self.notes])
 
-        treeview = ttk.Treeview(self.contents_frame, columns=['deck', 'tags', 'text'])
+        treeview = ttk.Treeview(self._contents_frame, columns=['deck', 'tags', 'text'])
 
         for i, res in enumerate(self.results):
             note = self.notes[i].to_json()
@@ -431,8 +468,8 @@ class FourthStep(AppStep):
         treeview.heading('text', text='Text')
 
         treeview.grid(column=0, row=0, sticky='NEWS')
-        self.contents_frame.columnconfigure(0, weight=1)
-        self.contents_frame.rowconfigure(0, weight=1)
+        self._contents_frame.columnconfigure(0, weight=1)
+        self._contents_frame.rowconfigure(0, weight=1)
 
     def revert(self):
         notes = list(filter(lambda x: x is not None, self.results))
@@ -440,11 +477,11 @@ class FourthStep(AppStep):
 
     def revert_and_back(self):
         self.revert()
-        self.back_func()
+        self._back_func()
 
     def revert_and_close(self):
         self.revert()
-        self.continue_func()
+        self._continue_func()
 
     def close(self):
         if self.has_errors:
@@ -454,21 +491,15 @@ class FourthStep(AppStep):
             response = messagebox.askyesno(
                 'Errors detected',
                 msg,
-                parent=self.messagebox_window,
+                parent=self._mbox_window,
                 icon='warning'
             )
             if response is not True:
                 return
         self.gui_quick_check()
-        self.continue_func()
+        self._continue_func()
 
     def gui_quick_check(self):
-        decks = set([note.deck for note in self.notes])
-
-        # for deck in decks:
-        #     anki_handler.invoke('guiBrowse', query=f'deck:{deck}')
-        #     time.sleep(0.5)
-
         for res in self.results:
             if res is None:
                 continue

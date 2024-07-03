@@ -9,22 +9,10 @@ from crawler import VaultCrawler
 from ._screens import FirstStep, SecondStep, ThirdStep, FourthStep, AppStep
 
 
-def _new_step_class(step: int, frame: ttk.Frame) -> FirstStep | SecondStep | ThirdStep | FourthStep:
-    if step == 0:
-        return FirstStep(frame)
-    elif step == 1:
-        return SecondStep(frame)
-    elif step == 2:
-        return ThirdStep(frame)
-    else:
-        return FourthStep(frame)
-
-
 class Focus:
     def __init__(self, root, crawler: VaultCrawler):
         self.root_window = root
 
-        self.stored_obj = None
         self.mainframe = ttk.Frame(root, padding=(5, 5, 5, 5))
         self.crawler = crawler
 
@@ -44,14 +32,25 @@ class Focus:
             self._third_step,
             self._fourth_step,
         ]
+        self.step_objs = [
+            FirstStep(self.step_frame, self.backwards, self.mainframe.quit, self.forward, self.root_window),
+            SecondStep(self.step_frame, self.backwards, self.mainframe.quit, self.forward, self.root_window),
+            ThirdStep(self.step_frame, self.backwards, self.mainframe.quit, self.forward, self.root_window),
+            FourthStep(self.step_frame, self.backwards, self.mainframe.quit, self.forward, self.root_window),
+        ]
         self.curr_step = -1
 
     def mainloop(self):
         self.forward()
 
-    def forward(self, stored_obj=None):
-        self.stored_obj = stored_obj
+    def forward(self):
+        if self.curr_step == -1:
+            message = self.crawler
+        else:
+            message = self.step_objs[self.curr_step].pass_forward()
+
         self.curr_step += 1
+        self.step_objs[self.curr_step].receive_message(message)
         self._execute()
 
     def backwards(self):
@@ -60,15 +59,8 @@ class Focus:
 
     def _execute(self):
         self._clear_step()
-
-        # generics
-        step = _new_step_class(self.curr_step, self.step_frame)
-        step.set_continue(self.forward)
-        step.set_back(self.backwards)
-        step.set_cancel(self.mainframe.quit)
-        step.set_messagebox_window(self.root_window)
-
-        self.step_funcs[self.curr_step](step)
+        step_obj = self.step_objs[self.curr_step]
+        self.step_funcs[self.curr_step](step_obj)
 
     def _clear_step(self):
         for i in self.step_frame.winfo_children():
@@ -78,46 +70,25 @@ class Focus:
         label = ttk.Label(self.step_label, text='1. Validate parsed anki files')
         label.grid(column=0, row=0, sticky='NSW')
 
-        # step = FirstStep(self.step_frame, self.crawler)
-        # step.set_continue(self.forward)
-        # step.set_cancel(self.mainframe.quit)
-        # step.set_messagebox_window(self.root_window)
-        step.crawler = self.crawler
         step.mainloop()
 
     def _second_step(self, step: SecondStep):
         label = ttk.Label(self.step_label, text='2. Convert markdown to html')
         label.grid(column=0, row=1, sticky='NSW')
 
-        # step = SecondStep(self.step_frame, self.crawler)
-        # step.set_continue(self.forward)
-        # step.set_back(self.backwards)
-        # step.set_cancel(self.mainframe.quit)
-        # step.set_messagebox_window(self.root_window)
-        step.crawler = self.crawler
         step.mainloop()
 
     def _third_step(self, step: ThirdStep):
         label = ttk.Label(self.step_label, text='3. Validate files with Anki')
         label.grid(column=0, row=2, sticky='NSW')
 
-        # step = ThirdStep(self.step_frame, self.stored_obj)
-        # step.set_continue(self.forward)
-        # step.set_back(self.backwards)
-        # step.set_cancel(self.mainframe.quit)
-        # step.set_messagebox_window(self.root_window)
-        step.selected_notes = self.stored_obj
         step.mainloop()
 
     def _fourth_step(self, step: FourthStep):
         label = ttk.Label(self.step_label, text='4. Anki results')
         label.grid(column=0, row=3, sticky='NSW')
 
-        # step = FourthStep(self.step_frame, self.stored_obj)
-        # step.set_back(self.backwards)
         step.set_continue(self.mainframe.quit)
-        # step.set_messagebox_window(self.root_window)
-        step.notes = self.stored_obj
         step.mainloop()
 
 

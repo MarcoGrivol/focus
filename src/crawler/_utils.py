@@ -10,6 +10,23 @@ class CrawlerError(ValueError):
         self.message = message
 
 
+class HeadingNotFoundError(CrawlerError):
+    pattern = re.compile(r'<heading>(.*?)\)')
+
+    def __init__(self, heading: str | re.Pattern):
+        self.message = f'Heading "{self.format_msg(heading)}" not found'
+
+    def format_msg(self, heading: str | re.Pattern) -> str:
+        if isinstance(heading, str):
+            return heading
+
+        m = self.pattern.search(heading.pattern)
+        if m is None:
+            return heading.pattern
+        else:
+            return m.group(1)
+
+
 ObsidianLink = namedtuple('ObsidianLink', ['name', 'heading', 'alias'])
 
 
@@ -18,7 +35,7 @@ DEFAULT_MODE = 'curr'
 
 
 def re_heading(heading) -> re.Pattern:
-    return re.compile(r'(#+?) +(' + heading + r') *\n')
+    return re.compile(r'(#+?) +(?P<heading>' + heading + r') *\n')
 
 
 ANS_ALIAS_TOKEN = 'ans'
@@ -76,7 +93,7 @@ def find_heading(data: str, heading: str | re.Pattern, mode='curr') -> str:
     # heads[2] = heading text
     # heads[3] = text after
     if len(heads) == 1:
-        return ''  # heading is not present in text
+        raise HeadingNotFoundError(heading)
 
     text = f'{heads[1]} {heads[2]}\n'
     if mode == 'forw':

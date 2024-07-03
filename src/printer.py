@@ -1,64 +1,113 @@
 ﻿import re
-from typing import Tuple, List
-from xml.etree import ElementTree as ET
 import markdown
+from collections import namedtuple
+from typing import Tuple, List
 
-from anki_handler import CSS_WIKILINK, CSS_HIGHLIGHT
+from crawler import AnkiNote
+
+Style = namedtuple('Style', ['name', 'css'])
+
+CSS_CARD = Style('card',
+                 '.card {'   
+                    ' font-family: arial;'
+                    ' font-size: 20px;'
+                    ' text-align: left;'
+                    ' color: black;'
+                    ' background-color: white;'
+                 '}'
+)
+CSS_WIKILINK = Style('wikilink', '.wikilink { color: rgb(0, 85, 255); }')
+CSS_HIGHLIGHT = Style('highlight', '.highlight { background-color: rgb(255, 255, 0); }')
+CSS_CALLOUT = Style('callout', '.callout { margin-left: 5px; max-width: 500px; }')
+CSS_CALLOUT_HEADER = Style('callout-header',
+                            '.callout-header {'
+                                'padding: 5px 10px 10px 10px;'
+                                'background: #ecf4fc;'
+                                'font-weight: 600;'
+                                'border-top: 1px solid black;'
+                                'border-left: 1px solid black;'
+                                'border-right: 1px solid black;'
+                                'border-top-left-radius: 7px;'
+                                'border-top-right-radius: 7px;'
+                            '}'
+)
+CSS_CALLOUT_BODY = Style('callout-body',
+                         '.callout-body {'
+                            'padding: 1px 10px 1px 10px;'
+                            'background-color: rgba(236, 244, 252, 0.25);'
+                            'color: black;'
+                            'border-left: 1px solid black;'
+                            'border-bottom: 1px solid black;'
+                            'border-right: 1px solid black;'
+                            'border-bottom-left-radius: 7px;'
+                            'border-bottom-right-radius: 7px;'
+                         '}'
+)
 
 
-def note_to_webview(fields: List[Tuple[str, str]]):
+def get_styling():
+    styling = CSS_CARD.css + '\n'
+    styling += CSS_WIKILINK.css + '\n'
+    styling += CSS_HIGHLIGHT.css + '\n'
+    styling += CSS_CALLOUT.css + '\n'
+    styling += CSS_CALLOUT_HEADER.css + '\n'
+    styling += CSS_CALLOUT_BODY.css + '\n'
+    return styling
+
+
+def notes_webview(notes: List[AnkiNote]) -> str:
+    html = '<!DOCTYPE html><html lang="en">\n<head>\n'
+    html += '<meta charset="UTF-8">\n'
+    html += '<title>Note preview</title>\n'
+    html += '<style>' + get_styling() + '</style>\n'
+    html += '<script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>\n'
+    html += '</head>\n<body>\n'
+
+    for i, note in enumerate(notes):
+        html += f'<h1>note={i+1}</h1><hr>'
+        front, back = note_to_html(list(note.get_fields()), web=True)
+        html += front
+        html += back
+
+    html += '</body>\n</html>\n'
+    return html
+
+
+def note_to_html(fields: List[Tuple[str, str]], web=False):
     front, back = '', ''
     if len(fields) == 1:
         q, ans = fields[0]
-        front = text_to_html(q)
-        back = text_to_html(ans)
+        front = text_to_html(q, web=web)
+        back = text_to_html(ans, web=web)
     else:
         for i, (q, ans) in enumerate(fields):
-            front += f'<h1>Q{i}</h1><hr>\n' + text_to_html(q, True)
-            back += f'<h1>R{i}</h1><hr>\n' + text_to_html(ans, True)
-    root = ET.Element('')
+            front += f'<b>Q{i+1}</b>' + text_to_html(q, True, web)
+            back += f'<b>R{i+1}</b>' + text_to_html(ans, True, web)
     return front, back
 
 
-def note_to_html(fields: List[Tuple[str, str]]):
-    front, back = '', ''
-    if len(fields) == 1:
-        q, ans = fields[0]
-        front = text_to_html(q)
-        back = text_to_html(ans)
-    else:
-        for i, (q, ans) in enumerate(fields):
-            front += f'<h1>Q{i}</h1><hr>\n' + text_to_html(q, True)
-            back += f'<h1>R{i}</h1><hr>\n' + text_to_html(ans, True)
-    return front, back
-
-
-def text_to_html(text, lower_headings=False):
+def text_to_html(text, lower_headings=False, web=False):
     text = _replace_link(text)
     text = _replace_strikethrough(text)
-    text = _remove_tags(text)
+    text = re.sub(r'#\w+([_/\-]\w*)*', '', text)  # remove tags
+    text = re.sub(r'^ {0,3}--- *\n', '\n', text, flags=re.MULTILINE)  # remove hr
     if lower_headings:
-        text = _remove_hr(text)
         text = _lower_headings(text)
     text = _safe_headings(text)
     text = _safe_lists(text)
-    text = _replace_mathjax(text)
     text = _replace_highlight(text)
-    return markdown.markdown(text, extensions=['tables', 'sane_lists'])
+    text = _replace_anki_mathjax(text)
+    text = _replace_callout(text)
+    text = markdown.markdown(text, extensions=['tables', 'sane_lists'])
+    if web:
+        text = _replace_mathjax(text)
+    return text
 
 
 def _replace_strikethrough(text):
     def repl(m):
         return f'<s>{m.group(1)}</s>'
     return re.sub(r'~~(.*?)~~', repl, text, flags=re.MULTILINE)
-
-
-def _remove_tags(text):
-    return re.sub(r'#\w+([_/\-]\w*)*', '', text)  # remove tags
-
-
-def _remove_hr(text):
-    return re.sub(r'^ {0,3}--- *\n', '', text, flags=re.MULTILINE)
 
 
 def _lower_headings(text):
@@ -119,7 +168,7 @@ def _safe_headings(text):
     return new_text
 
 
-def _replace_mathjax(text):
+def _replace_anki_mathjax(text):
     def repl_block(m):
         return f'<anki-mathjax block="true">{m.group(1)}</anki-mathjax>'
 
@@ -128,6 +177,28 @@ def _replace_mathjax(text):
 
     text = re.sub(r'\$\$(.*?)\$\$', repl_block, text)
     return re.sub(r'\$(.*?)\$', repl, text)
+
+
+def _replace_mathjax(text):
+    def repl_block(m):
+        return f'$${m.group(1)}$$'
+
+    def repl(m):
+        return f'\\({m.group(1)}\\)'
+
+    text = re.sub(r'<anki-mathjax block="true">(.*?)</anki-mathjax>', repl_block, text)
+    return re.sub(r'<anki-mathjax>(.*?)</anki-mathjax>', repl, text)
+
+
+def _replace_callout(text):
+    def repl(m):
+        color = ''
+        callout = f'<div class="{CSS_CALLOUT.name}">'
+        callout += f'<div class="{CSS_CALLOUT_HEADER.name}">{m.group(2)}</div>'
+        callout += f'<div class="{CSS_CALLOUT_BODY.name}">{m.group(3)}</div>'
+        callout += '</div>'
+        return callout
+    return re.sub(r'> *\[!(\w+)] +(.*?)\n(?:> *(.*)?\n)+', repl, text)
 
 
 def _replace_highlight(text):
@@ -140,34 +211,14 @@ def _replace_highlight(text):
 def _replace_link(text):
     def repl(m):
         link = m.group(1)
+
         if '|' in link:
             link = link.split('|')[1]
-        if '#' in link:
+        elif '#' in link:
             link = link.split('#')[1]
+        else:
+            link = link.split('/')[-1]  # name, split on folders
+
         return f'<span class="{CSS_WIKILINK.name}">{link}</span>'
 
     return re.sub(r'\[\[(.*?)]]', repl, text)
-
-
-def _main():
-    from crawler import vault_crawler
-
-    db = 'C:\\mine\\vaults\\projeto_medicina'
-
-    vault_notes = vault_crawler(db)
-
-    for i, note in enumerate(vault_notes):
-        print(f'{i + 1}/{len(vault_notes)}: {note.deck}/{note.tag}')
-        if note.questions is None:
-            print('\t INVALID NOTE')
-            continue
-
-        for j, (q, ans) in enumerate(zip(note.questions, note.answers)):
-            print(f'\t {j} BEFORE : {ans}')
-            print(f'\t {j} AFTER  : {convert_to_html(ans)}')
-
-        print()
-
-
-if __name__ == '__main__':
-    _main()

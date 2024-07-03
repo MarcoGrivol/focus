@@ -2,7 +2,7 @@
 from collections import namedtuple
 
 from os import path
-from typing import Tuple, List, Dict
+from typing import Tuple
 
 
 class CrawlerError(ValueError):
@@ -18,23 +18,23 @@ DEFAULT_MODE = 'curr'
 
 
 def re_heading(heading) -> re.Pattern:
-    return re.compile(r'(#+?) +' + heading + r' *\n')
+    return re.compile(r'(#+?) +(' + heading + r') *\n')
 
 
 ANS_ALIAS_TOKEN = 'ans'
 # #[...] [...]ANYTHING[spaces]\n
 # Group: (1)=hashtags, (2)=heading text
-RE_HEADING = re_heading(r'(.+?)')
+RE_HEADING = re_heading(r'.+?')
 RE_ANKI_HEADING = re_heading('Anki Cards')
-# Target: #anki/DECK/TAG[/SUB_TAGS]
-# Group: DECK e TAG[/SUB_TAGS], used to determine the Anki deck and Note tags
-RE_ANKI_TAG = re.compile(r'(#anki)/(\S+?)/(\S.+)')
+# Target: #anki/DECK/TAG/SUB_TAGS
+# Group: DECK and TAG/SUB_TAGS, used to determine the Anki deck and Note tags
+RE_ANKI_TAG = re.compile(r'#anki/((\S+?)/\S.+)')
 # Target: NUMBER. QUESTION TEXT
 # Group: returns the text of the question
 RE_NOTE_BODY = re.compile(r'(?:^|\n\s*)\d+\. +(.+)')  # re.compile(r'(?<=\n)\s*\d+\. +(.+)')
 # Targe: QUESTION .|? [[text[#op]|ans]]
 # Groups: (1)=question, (2)=link
-RE_NOTE_ENTRY = re.compile(r'(.+?(?:[.?]|$))\s*(?:\[\[(.+\|' + ANS_ALIAS_TOKEN + r')]])*')
+RE_NOTE_ENTRY = re.compile(r'(.+?(?:[.?]|$))\s*(?:\[\[(.+\|' + ANS_ALIAS_TOKEN + r'(?:_\w*)?)]])*')
 # Target: [[ANY TEXT BETWEEN TWO BRACKETS]]
 # Group: text in between, may contain the optional #heading link or |link renaming tokens
 RE_LINKS = re.compile(r'\[\[(.+?)]]')
@@ -73,22 +73,37 @@ def find_heading(data: str, heading: str | re.Pattern, mode='curr') -> str:
     heads = heading.split(data, maxsplit=1)
     # heads[0] = text before
     # heads[1] = any number of #
-    # heads[2] = text after heading
+    # heads[2] = heading text
+    # heads[3] = text after
     if len(heads) == 1:
         return ''  # heading is not present in text
 
+    text = f'{heads[1]} {heads[2]}\n'
     if mode == 'forw':
-        text = heads[2]
+        text += heads[3]
     else:
         heading_level = len(heads[1])
-        text = ''
-        for i, s in enumerate(RE_HEADING.split(heads[2])):
+        heads = RE_HEADING.split(heads[3])
+        i = 0
+        while i < len(heads):
+            s = heads[i]
             if s == '#' * len(s):  # only hashtags
                 if mode == 'first':
                     break
                 elif len(s) <= heading_level:  # mode is 'curr'
                     break
+                s += f' {heads[i + 1]}\n'
+                i += 1  # heading text already added (above line), skip next token
             text += s
+            i += 1
+        # for i, s in enumerate(RE_HEADING.split(heads[3])):
+        #     if s == '#' * len(s):  # only hashtags
+        #         if mode == 'first':
+        #             break
+        #         elif len(s) <= heading_level:  # mode is 'curr'
+        #             break
+        #         s += ' '
+        #     text += s
 
     return text.strip()
 

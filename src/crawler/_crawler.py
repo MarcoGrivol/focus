@@ -1,5 +1,5 @@
 ﻿import os
-from typing import Iterator
+from typing import Iterator, Dict, List
 
 from ._utils import *
 
@@ -28,12 +28,13 @@ class Answer:
 
 
 class AnkiNote:
-    def __init__(self, relative_path, name, deck, tag, note_text):
+    def __init__(self, relative_path, name, deck, tags, note_text, main_tag=None):
         self.relative_path = relative_path
         self.name = name
         self.text = note_text
         self.deck = deck
-        self.tag = tag
+        self.tags = tags
+        self.main_tag = main_tag if main_tag else self.tags[0]
 
         self._is_valid = True
         self._invalid_reason = None
@@ -82,7 +83,7 @@ class NoteTree(object):
     def __init__(self, notes: List[AnkiNote]):
         tree: Dict[str, Dict[str, List[Tuple[int, AnkiNote]]]] = {}
         for i, note in enumerate(notes):
-            d, t = note.deck, note.tag
+            d, t = note.deck, note.main_tag
             if d not in tree:
                 tree[d] = {}
             if t not in tree[d]:
@@ -125,9 +126,9 @@ class VaultCrawler:
             with open(filepath, 'r', encoding='utf-8') as fp:
                 text = fp.read()
 
-            anki_tag = RE_ANKI_TAG.search(text)
-            deck = anki_tag.group(2)
-            tag = anki_tag.group(3)
+            anki_tags = RE_ANKI_TAG.findall(text)
+            deck = anki_tags[0][1]
+            tags = [m[0] for m in anki_tags]
             cards_text = find_heading(text, RE_ANKI_HEADING, mode='first')
             if cards_text == '':
                 raise ValueError(f'anki heading not found for {filepath}')
@@ -135,7 +136,7 @@ class VaultCrawler:
             for note_entry in RE_NOTE_BODY.findall(cards_text):
 
                 name, rp = relpath(self.vault, filepath)
-                note = AnkiNote(rp, name, deck, tag, note_entry)
+                note = AnkiNote(rp, name, deck, tags, note_entry)
 
                 if not note.is_valid():
                     self.invalid_notes.append(note)

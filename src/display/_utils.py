@@ -23,7 +23,8 @@ def build_filetree_view(treeview, parent_id, tree):
             treeview.insert(parent_id, 'end', text=f, values=['', text])
 
 
-def build_notetree_view(treeview, parent_id, tree: NoteTree):
+def build_notetree_view(treeview, parent_id, tree: NoteTree) -> Dict[str, int]:
+    index_map = {}
     for deck in tree:
         values = [count_leaves(tree[deck]), '', '']
         d_id = treeview.insert(parent_id, 'end', text=deck, values=values)
@@ -35,18 +36,20 @@ def build_notetree_view(treeview, parent_id, tree: NoteTree):
             for i, note in tree[deck][tag]:
                 if note.is_valid():
                     status_text = 'OK'
-                    status_tag = 1
+                    status_tag = 'valid'
                 else:
                     status_text = note.get_invalid_reason()
-                    status_tag = 0
+                    status_tag = 'invalid'
 
-                treeview.insert(
+                iid = treeview.insert(
                     t_id,
                     'end',
                     text=note.relative_path,
                     values=['', status_text, note.text[:48] + '...'],
-                    tag=['note', i, status_tag]
+                    tags=['note', status_tag]
                 )
+                index_map[iid] = i
+    return index_map
 
 
 def open_tree_recursively(tree, event):

@@ -61,7 +61,7 @@ def check_for_changes():
     return True, None
 
 
-class AnkiJsonEntry:
+class AnkiNote:
     def __init__(self, deck, question, answer, tags):
         self.deck = deck
         self.tags = tags
@@ -93,7 +93,7 @@ class AnkiJsonEntry:
     def calculate_ratio(self):
         q_max, ans_max = 0, 0
 
-        results = find_notes(self.deck, self.tags)
+        results = find_notes(self.deck, self.convert_to_nested_tags())
         if len(results) == 1:
             return q_max, ans_max
 
@@ -187,7 +187,7 @@ def requires_styling_changes():
     return False
 
 
-def match_with_anki(note: AnkiJsonEntry) -> Tuple[float, float]:
+def match_with_anki(note: AnkiNote) -> Tuple[float, float]:
     q_max = 0
     ans_max = 0
 
@@ -216,12 +216,9 @@ def match_with_anki(note: AnkiJsonEntry) -> Tuple[float, float]:
 
 
 def find_notes(deck, tags):
-    if deck not in invoke('deckNames'):
-        return []
-    if tags not in invoke('getTags'):
-        return []
-
-    q = f'deck:{deck} and tag:{tags}'
+    q = f'deck:{deck}'
+    for tag in tags:
+        q += f' and tag:{tag}'
     return invoke('findNotes', query=q)
 
 

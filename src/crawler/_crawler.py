@@ -27,7 +27,7 @@ class Answer:
         self._text = text
 
 
-class AnkiNote:
+class ObsidianNote:
     def __init__(self, relative_path, name, deck, tags, note_text, main_tag=None):
         self.relative_path = relative_path
         self.name = name
@@ -80,8 +80,8 @@ class AnkiNote:
 
 
 class NoteTree(object):
-    def __init__(self, notes: List[AnkiNote]):
-        tree: Dict[str, Dict[str, List[Tuple[int, AnkiNote]]]] = {}
+    def __init__(self, notes: List[ObsidianNote]):
+        tree: Dict[str, Dict[str, List[Tuple[int, ObsidianNote]]]] = {}
         for i, note in enumerate(notes):
             d, t = note.deck, note.main_tag
             if d not in tree:
@@ -91,7 +91,7 @@ class NoteTree(object):
             tree[d][t].append((i, note))
         self._tree = tree
 
-    def __getitem__(self, key) -> Dict[str, List[Tuple[int, AnkiNote]]]:
+    def __getitem__(self, key) -> Dict[str, List[Tuple[int, ObsidianNote]]]:
         return self._tree[key]
 
     def __iter__(self):
@@ -108,19 +108,19 @@ class VaultCrawler:
         self.anki_files: List[str] = []
         self.invalid_files: Dict[str, str] = {}
         # formatted notes
-        self.valid_notes: List[AnkiNote] = []
-        self.invalid_notes: List[AnkiNote] = []
+        self.valid_notes: List[ObsidianNote] = []
+        self.invalid_notes: List[ObsidianNote] = []
 
         self._crawl()
 
     def reset(self):
         self._crawl()
-        self.valid_notes: List[AnkiNote] = []
-        self.invalid_notes: List[AnkiNote] = []
+        self.valid_notes: List[ObsidianNote] = []
+        self.invalid_notes: List[ObsidianNote] = []
 
     def convert_files(self):
-        self.valid_notes: List[AnkiNote] = []
-        self.invalid_notes: List[AnkiNote] = []
+        self.valid_notes: List[ObsidianNote] = []
+        self.invalid_notes: List[ObsidianNote] = []
         for filepath in self.anki_files:
 
             with open(filepath, 'r', encoding='utf-8') as fp:
@@ -136,7 +136,7 @@ class VaultCrawler:
             for note_entry in RE_NOTE_BODY.findall(cards_text):
 
                 name, rp = relpath(self.vault, filepath)
-                note = AnkiNote(rp, name, deck, tags, note_entry)
+                note = ObsidianNote(rp, name, deck, tags, note_entry)
 
                 if not note.is_valid():
                     self.invalid_notes.append(note)
@@ -196,7 +196,7 @@ class VaultCrawler:
                 else:
                     self.anki_files.append(f_path)
 
-    def _set_answers(self, note: AnkiNote, text: str):
+    def _set_answers(self, note: ObsidianNote, text: str):
         for i, ans in enumerate(note.answers):
             if ans.is_self_ref():
                 ans_text = find_heading(text, ans.get_link().heading, parse_mode(ans.get_link()))

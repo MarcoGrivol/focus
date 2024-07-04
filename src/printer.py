@@ -1,9 +1,13 @@
-﻿import re
+﻿import os
+import re
+import webbrowser
+from os import path
+
 import markdown
 from collections import namedtuple
 from typing import Tuple, List
 
-from crawler import AnkiNote
+from crawler import ObsidianNote
 
 Style = namedtuple('Style', ['name', 'css'])
 
@@ -51,6 +55,9 @@ CSS_BLOCKQUOTE = Style('blockquote',
                             'border-radius: 5px;'
                         '}'
 )
+CSS_TABLE = Style('table',
+                  'table, th, td {border: 1px solid black; border-collapse: collapse; } th, td { padding: 5px; }'
+)
 CSS_CALLOUT_HEADER_COLORS = {
     'note': 'background: #e6f0fb; border-left-color: #0094fd; color: #086ddd',
     'info': 'background: #e6f0fb; border-left-color: #0094fd; color: #086ddd',
@@ -67,6 +74,7 @@ CSS_CALLOUT_BODY_COLORS = {
 
 def get_styling():
     styling = CSS_CARD.css + '\n'
+    styling += CSS_TABLE.css + '\n'
     styling += CSS_WIKILINK.css + '\n'
     styling += CSS_HIGHLIGHT.css + '\n'
     styling += CSS_CALLOUT.css + '\n'
@@ -76,7 +84,16 @@ def get_styling():
     return styling
 
 
-def notes_webview(notes: List[AnkiNote]) -> str:
+
+def webpreview(notes: List[ObsidianNote]):
+    filepath = path.join(os.getcwd(), 'tmp.html')
+    with open(filepath, 'w', encoding='utf-8') as fp:
+        buf = note_to_web(notes)
+        fp.write(buf)
+    webbrowser.open('file:///' + filepath)
+
+
+def note_to_web(notes: List[ObsidianNote]) -> str:
     html = '<!DOCTYPE html><html lang="en">\n<head>\n'
     html += '<meta charset="UTF-8">\n'
     html += '<title>Note preview</title>\n'

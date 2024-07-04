@@ -1,8 +1,8 @@
-﻿from ._crawler import VaultCrawler, NoteTree, AnkiNote, Answer
+﻿from ._crawler import VaultCrawler, NoteTree, ObsidianNote, Answer
 
 __all__ = [
     'VaultCrawler',
     'NoteTree',
-    'AnkiNote',
+    'ObsidianNote',
     'Answer'
 ]

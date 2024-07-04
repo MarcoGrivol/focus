@@ -1,4 +1,5 @@
 ﻿from os import path
+from tkinter import ttk
 from typing import Dict, List
 
 from crawler import NoteTree
@@ -59,3 +60,17 @@ def open_tree_recursively(tree, event):
             _open_children(child)
 
     _open_children(tree.focus())
+
+
+def get_treeview_selection(treeview: ttk.Treeview, iid_list: tuple, key=lambda x: True, option=None):
+    items = []
+    for iid in iid_list:
+
+        children = treeview.get_children(iid)
+        if len(children) > 0:
+            items.extend(get_treeview_selection(treeview, children, key, option))
+
+        elif key(treeview.item(iid, option=option)):
+            items.append(iid)
+
+    return items

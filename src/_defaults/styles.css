@@ -1,0 +1,116 @@
+﻿
+blockquote {
+    max-width: 75%;
+    background-color: #ebebeb;
+    padding: 4px;
+    border-left: 5px solid #a68cda;
+    border-radius: 5px;
+}
+
+table, th, td {
+    border: 1px solid black;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 5px;
+}
+
+strong {
+    color: #dc3233;
+}
+
+em {
+    color: #508d00;
+}
+
+.card {
+    font-family: arial;
+    font-size: 20px;
+    text-align: left;
+    color: black;
+    background-color: white;
+}
+
+.wikilink {
+    color: rgb(0, 85, 255);
+}
+
+.highlight {
+    background-color: rgb(255, 255, 0);
+}
+
+.callout {
+    margin-left: auto; margin-right: auto; max-width: 500px;
+}
+
+.callout-header {
+    padding: 5px 10px 10px 10px;
+    font-weight: 600;
+    border-top: 1px solid black;
+    border-left: 5px solid;
+    border-right: 1px solid black;
+    border-top-left-radius: 7px;
+    border-top-right-radius: 7px;
+}
+
+.callout-body {
+    padding: 1px 10px 1px 10px;
+    background-color: #fafafa;
+    color: black;
+    border-left: 5px solid;
+    border-bottom: 1px solid black;
+    border-right: 1px solid black;
+    border-bottom-left-radius: 7px;
+    border-bottom-right-radius: 7px;
+}
+
+.callout-header-note{
+    background: #e6f0fb;
+    border-left-color: #086ddd;
+    color: #086ddd;
+}
+
+.callout-header-info {
+    background: #e6f0fb;
+    border-left-color: #086ddd;
+    color: #086ddd;
+}
+
+.callout-header-warning {
+    background: #fdf1e5;
+    border-left-color: #ec7500;
+    color: #ec7500;
+}
+
+.callout-header-danger {
+    background: #fdeaec;
+    border-left-color: #e93147;
+    color: #e93147;
+}
+
+.callout-header-error {
+    background: #fdeaec;
+    border-left-color: #e93147;
+    color: #e93147;
+}
+
+.callout-body-note {
+    border-left-color: #086ddd;
+}
+
+.callout-body-info {
+    border-left-color: #086ddd;
+}
+
+.callout-body-warning {
+    border-left-color: #ec7500;
+}
+
+.callout-body-danger {
+    border-left-color: #e93147;
+}
+
+.callout-body-error {
+    border-left-color: #e93147;
+}

@@ -1,6 +1,6 @@
-﻿from ._focus import focus
+﻿from .focus import mainloop
 
 
 __all__ = [
-    "focus"
+    "mainloop"
 ]

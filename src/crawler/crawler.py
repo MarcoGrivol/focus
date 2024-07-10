@@ -1,7 +1,7 @@
 ﻿import os
 from typing import Iterator, Dict, List
 
-from ._utils import *
+from .utils import *
 
 
 class Answer:
@@ -27,14 +27,20 @@ class Answer:
         self._text = text
 
 
-class AnkiNote:
+class ObsidianNote:
     def __init__(self, relative_path, name, deck, tags, note_text, main_tag=None):
+        if not isinstance(deck, str):
+            raise TypeError(f'deck must be a string, not {type(deck)}')
+        if not isinstance(tags, list):
+            raise TypeError(f'tags must be a list, not {type(tags)}')
+
         self.relative_path = relative_path
         self.name = name
         self.text = note_text
         self.deck = deck
         self.tags = tags
         self.main_tag = main_tag if main_tag else self.tags[0]
+        self.main_tag = main_tag.split('/', maxsplit=1)[1]
 
         self._is_valid = True
         self._invalid_reason = None
@@ -80,8 +86,8 @@ class AnkiNote:
 
 
 class NoteTree(object):
-    def __init__(self, notes: List[AnkiNote]):
-        tree: Dict[str, Dict[str, List[Tuple[int, AnkiNote]]]] = {}
+    def __init__(self, notes: List[ObsidianNote]):
+        tree: Dict[str, Dict[str, List[Tuple[int, ObsidianNote]]]] = {}
         for i, note in enumerate(notes):
             d, t = note.deck, note.main_tag
             if d not in tree:
@@ -91,7 +97,7 @@ class NoteTree(object):
             tree[d][t].append((i, note))
         self._tree = tree
 
-    def __getitem__(self, key) -> Dict[str, List[Tuple[int, AnkiNote]]]:
+    def __getitem__(self, key) -> Dict[str, List[Tuple[int, ObsidianNote]]]:
         return self._tree[key]
 
     def __iter__(self):
@@ -108,35 +114,33 @@ class VaultCrawler:
         self.anki_files: List[str] = []
         self.invalid_files: Dict[str, str] = {}
         # formatted notes
-        self.valid_notes: List[AnkiNote] = []
-        self.invalid_notes: List[AnkiNote] = []
+        self.valid_notes: List[ObsidianNote] = []
+        self.invalid_notes: List[ObsidianNote] = []
 
         self._crawl()
 
     def reset(self):
         self._crawl()
-        self.valid_notes: List[AnkiNote] = []
-        self.invalid_notes: List[AnkiNote] = []
+        self.valid_notes: List[ObsidianNote] = []
+        self.invalid_notes: List[ObsidianNote] = []
 
     def convert_files(self):
-        self.valid_notes: List[AnkiNote] = []
-        self.invalid_notes: List[AnkiNote] = []
+        self.valid_notes: List[ObsidianNote] = []
+        self.invalid_notes: List[ObsidianNote] = []
         for filepath in self.anki_files:
 
             with open(filepath, 'r', encoding='utf-8') as fp:
                 text = fp.read()
 
-            anki_tags = RE_ANKI_TAG.findall(text)
-            deck = anki_tags[0][1]
-            tags = [m[0] for m in anki_tags]
-            cards_text = find_heading(text, RE_ANKI_HEADING, mode='first')
-            if cards_text == '':
-                raise ValueError(f'anki heading not found for {filepath}')
+            main_tag = RE_MAIN_ANKI_TAG.search(text)
+            deck = main_tag['deck']
+            tags = RE_ANKI_TAG.findall(text)
 
+            cards_text = find_heading(text, RE_ANKI_HEADING, mode='first')
             for note_entry in RE_NOTE_BODY.findall(cards_text):
 
                 name, rp = relpath(self.vault, filepath)
-                note = AnkiNote(rp, name, deck, tags, note_entry)
+                note = ObsidianNote(rp, name, deck, tags, note_entry, main_tag=main_tag[1])
 
                 if not note.is_valid():
                     self.invalid_notes.append(note)
@@ -196,7 +200,7 @@ class VaultCrawler:
                 else:
                     self.anki_files.append(f_path)
 
-    def _set_answers(self, note: AnkiNote, text: str):
+    def _set_answers(self, note: ObsidianNote, text: str):
         for i, ans in enumerate(note.answers):
             if ans.is_self_ref():
                 ans_text = find_heading(text, ans.get_link().heading, parse_mode(ans.get_link()))
@@ -207,6 +211,9 @@ class VaultCrawler:
 
     def _goto(self, link: ObsidianLink) -> str:
         key = path.basename(link.name)
+        if key not in self._vault_links:
+            raise CrawlerError(f'link points to a non-existent file: {key}')
+
         relative_paths = self._vault_links[key]
 
         filepath = None

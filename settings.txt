@@ -1,0 +1,3 @@
+﻿VAULT=C:\mine\vaults\projeto_medicina
+PROFILE=python_sandbox
+STYLES=C:\mine\cs\repos\focus\mystyles.css

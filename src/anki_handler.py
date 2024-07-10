@@ -1,14 +1,12 @@
 ﻿import json
 import urllib.request
 
-from collections import namedtuple
 from difflib import SequenceMatcher
 from typing import Tuple, List
 
-from printer import get_styling
+# focus imports
+import settings
 
-PROFILE = 'python_sandbox'
-DECK = 'printer_test'
 MODEL_NAME = 'Focus'
 
 
@@ -32,11 +30,11 @@ def invoke(action, **params):
 
 def startup():
     result = invoke('getProfiles')
-    if PROFILE not in result:
-        raise ValueError(f'{PROFILE} not found in getProfiles result')
-    result = invoke('loadProfile', name=PROFILE)
+    if settings.PROFILE not in result:
+        raise ValueError(f'{settings.PROFILE} not found in getProfiles result')
+    result = invoke('loadProfile', name=settings.PROFILE)
     if not result:
-        raise ValueError(f'unable to load {PROFILE}')
+        raise ValueError(f'unable to load {settings.PROFILE}')
 
     return check_for_changes()
 
@@ -63,6 +61,11 @@ def check_for_changes():
 
 class AnkiNote:
     def __init__(self, deck, question, answer, tags):
+        if not isinstance(deck, str):
+            raise TypeError('deck must be a string')
+        if not isinstance(tags, list):
+            raise TypeError('tags must be a list')
+
         self.deck = deck
         self.tags = tags
         self.question = question
@@ -107,7 +110,7 @@ class AnkiNote:
             matcher = SequenceMatcher(lambda x: x == ' ', self.answer, ans_b)
             ans_ratio = matcher.ratio()
 
-            if q_ratio > self.q_ratio:
+            if q_ratio > q_max:
                 q_max = q_ratio
             if ans_ratio > ans_max:
                 ans_max = ans_ratio
@@ -150,7 +153,7 @@ def apply_changes(changes: dict):
     if 'css' in changes:
         modify = {
             'name': MODEL_NAME,
-            'css': get_styling()
+            'css': settings.STYLES.to_string()
         }
         invoke('updateModelStyling', model=modify)
 
@@ -182,7 +185,7 @@ def requires_template_changes():
 
 def requires_styling_changes():
     result = invoke('modelStyling', modelName=MODEL_NAME)
-    if result['css'] != get_styling():
+    if result['css'] != settings.STYLES.to_string():
         return True
     return False
 
@@ -227,7 +230,7 @@ def _create_model():
         'createModel',
         modelName=MODEL_NAME,
         inOrderFields=['Question', 'Answer'],
-        css=get_styling(),
+        css=settings.STYLES.to_string(),
         isCloze=False,
         cardTemplates=_get_templates(inline=True)
     )

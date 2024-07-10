@@ -11,7 +11,7 @@ import printer
 import anki_handler
 from anki_handler import AnkiNote
 from crawler import VaultCrawler, ObsidianNote
-from ._utils import *
+from .utils import *
 from display import messages as mbox
 
 T_RATIO = 0.95
@@ -292,6 +292,9 @@ class ThirdStep(AppStep):
             status = anki_entry.status
             if status == 'cannot create note because it is a duplicate':
                 parent = dup_id
+                anki_entry.set_ratio(*anki_entry.calculate_ratio())
+                if anki_entry.exceeds_threshold(T_RATIO):
+                    tags.append('ratio_warn')
             else:
                 parent = err_id
 
@@ -391,8 +394,10 @@ class FourthStep(AppStep):
         self.parent.func_continue(None)
 
     def gui_quick_check(self):
-        for res in self.results:
+        print(f'Rendering latex equations, please wait...')
+        for i, res in enumerate(self.results):
             if res is None:
                 continue
+            print(f'\t{i+1}/{len(self.results)}: editing {res}')
             anki_handler.invoke('guiEditNote', note=res)
             time.sleep(0.5)

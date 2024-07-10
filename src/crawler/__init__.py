@@ -1,4 +1,4 @@
-﻿from ._crawler import VaultCrawler, NoteTree, ObsidianNote, Answer
+﻿from .crawler import VaultCrawler, NoteTree, ObsidianNote, Answer
 
 __all__ = [
     'VaultCrawler',

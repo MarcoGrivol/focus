@@ -1,19 +1,12 @@
-﻿from os import path
-
-from tkinter import *
-from tkinter import filedialog
+﻿from tkinter import *
 from tkinter import ttk
-from typing import List
 
 from crawler import VaultCrawler
-from ._screens import FirstStep, SecondStep, ThirdStep, FourthStep, AppController
+from .screens import FirstStep, SecondStep, ThirdStep, FourthStep, AppController
 from display import messages as mbox
 
 from anki_handler import MODEL_NAME
 import anki_handler
-
-
-
 
 
 def changes_warning(changes):
@@ -89,10 +82,7 @@ class Focus(AppController):
         step.mainloop()
 
 
-
-
-def focus(crawler: VaultCrawler):
-
+def mainloop(crawler: VaultCrawler):
     is_startup_ok, changes = anki_handler.startup()
     if not is_startup_ok:
         changes_warning(changes)

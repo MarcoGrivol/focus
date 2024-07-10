@@ -1,92 +1,32 @@
 ﻿import os
 import re
 import webbrowser
-from os import path
-
 import markdown
-from collections import namedtuple
+
+from os import path
 from typing import Tuple, List
 
+# focus imports
+import settings
 from crawler import ObsidianNote
 
-Style = namedtuple('Style', ['name', 'css'])
 
-CSS_CARD = Style('card',
-                 '.card {'   
-                    ' font-family: arial;'
-                    ' font-size: 20px;'
-                    ' text-align: left;'
-                    ' color: black;'
-                    ' background-color: white;'
-                 '}'
-)
-CSS_WIKILINK = Style('wikilink', '.wikilink { color: rgb(0, 85, 255); }')
-CSS_HIGHLIGHT = Style('highlight', '.highlight { background-color: rgb(255, 255, 0); }')
-CSS_CALLOUT = Style('callout', '.callout { margin-left: auto; margin-right: auto; max-width: 500px; }')
-CSS_CALLOUT_HEADER = Style('callout-header',
-                            '.callout-header {'
-                                'padding: 5px 10px 10px 10px;'
-                                'font-weight: 600;'
-                                'border-top: 1px solid black;'
-                                'border-left: 5px solid;'
-                                'border-right: 1px solid black;'
-                                'border-top-left-radius: 7px;'
-                                'border-top-right-radius: 7px;'
-                            '}'
-)
-CSS_CALLOUT_BODY = Style('callout-body',
-                         '.callout-body {'
-                            'padding: 1px 10px 1px 10px;'
-                            'background-color: #fafafa;'
-                            'color: black;'
-                            'border-left: 5px solid;'
-                            'border-bottom: 1px solid black;'
-                            'border-right: 1px solid black;'
-                            'border-bottom-left-radius: 7px;'
-                            'border-bottom-right-radius: 7px;'
-                         '}'
-)
-CSS_BLOCKQUOTE = Style('blockquote',
-                        'blockquote {'
-                            'max-width: 75%;'
-                            'background-color: #ebebeb;'
-                            'padding: 4px;'
-                            'border-left: 5px solid #a68cda;'
-                            'border-radius: 5px;'
-                        '}'
-)
-CSS_TABLE = Style('table',
-                  'table, th, td {border: 1px solid black; border-collapse: collapse; } th, td { padding: 5px; }'
-)
-CSS_CALLOUT_HEADER_COLORS = {
-    'note': 'background: #e6f0fb; border-left-color: #0094fd; color: #086ddd',
-    'info': 'background: #e6f0fb; border-left-color: #0094fd; color: #086ddd',
-    'warning': 'background: #fdf1e5; border-left-color: #ec7500; color: #ec7500',
-    'danger': 'background: #fdeaec; border-left-color: #e93147; color: #e93147'
-}
-CSS_CALLOUT_BODY_COLORS = {
-    'note': 'border-left-color: #0094fd; ',
-    'info': 'border-left-color: #0094fd;',
-    'warning': 'border-left-color: #ec7500;',
-    'danger': 'border-left-color: #e93147;',
-}
-
-
-def get_styling():
-    styling = CSS_CARD.css + '\n'
-    styling += CSS_TABLE.css + '\n'
-    styling += CSS_WIKILINK.css + '\n'
-    styling += CSS_HIGHLIGHT.css + '\n'
-    styling += CSS_CALLOUT.css + '\n'
-    styling += CSS_CALLOUT_HEADER.css + '\n'
-    styling += CSS_CALLOUT_BODY.css + '\n'
-    styling += CSS_BLOCKQUOTE.css
-    return styling
-
+_RE_CALLOUT = re.compile(r'<blockquote>\s*<p>\[!(\w+)] *(.*)([\s\S]*)</p>\s*</blockquote>')
+_RE_TAGS = re.compile(r'#\w+([_/\-]\w*)*')
+_RE_HR = re.compile(r'^ {0,3}--- *\n', flags=re.MULTILINE)
+_RE_STRIKE = re.compile(r'~~(.*?)~~', flags=re.MULTILINE)
+_RE_HEADING = re.compile(r'^(#+)( +.*?)\n', flags=re.MULTILINE)
+_RE_MATH_BLOCK = re.compile(r'\$\$(.*?)\$\$', flags=re.MULTILINE)
+_RE_MATH = re.compile(r'\$(.*?)\$')
+_RE_MATH_ANKI_BLOCK = re.compile(r'<anki-mathjax block="true">(.*?)</anki-mathjax>', flags=re.MULTILINE)
+_RE_MATH_ANKI = re.compile(r'<anki-mathjax>(.*?)</anki-mathjax>')
+_RE_HIGHLIGHT = re.compile(r'==(.*?)==')
+_RE_LINK = re.compile(r'\[\[(.*?)]]')
+_RE_LISTS = re.compile(r'^ *(\*|-|\d+\.) +(.*)')
 
 
 def webpreview(notes: List[ObsidianNote]):
-    filepath = path.join(os.getcwd(), 'tmp.html')
+    filepath = path.join(settings.OUTPUT_DIR, 'tmp.html')
     with open(filepath, 'w', encoding='utf-8') as fp:
         buf = note_to_web(notes)
         fp.write(buf)
@@ -97,8 +37,10 @@ def note_to_web(notes: List[ObsidianNote]) -> str:
     html = '<!DOCTYPE html><html lang="en">\n<head>\n'
     html += '<meta charset="UTF-8">\n'
     html += '<title>Note preview</title>\n'
-    html += '<style>' + get_styling() + '</style>\n'
-    html += '<script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>\n'
+    html += '<style>' + settings.STYLES.to_string() + '</style>\n'
+    html += '<script type="text/javascript" id="MathJax-script" '
+    html += 'async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">'
+    html += '</script>\n'
     html += '</head>\n<body>\n'
 
     for i, note in enumerate(notes):
@@ -127,8 +69,8 @@ def note_to_html(fields: List[Tuple[str, str]], web=False):
 def text_to_html(text, lower_headings=False, web=False):
     text = _replace_link(text)
     text = _replace_strikethrough(text)
-    text = re.sub(r'#\w+([_/\-]\w*)*', '', text)  # remove tags
-    text = re.sub(r'^ {0,3}--- *\n', '\n', text, flags=re.MULTILINE)  # remove hr
+    text = _RE_TAGS.sub('', text)  # remove tags
+    text = _RE_HR.sub('', text)  # remove hr
     if lower_headings:
         text = _lower_headings(text)
     text = _safe_headings(text)
@@ -145,25 +87,23 @@ def text_to_html(text, lower_headings=False, web=False):
 def _replace_strikethrough(text):
     def repl(m):
         return f'<s>{m.group(1)}</s>'
-    return re.sub(r'~~(.*?)~~', repl, text, flags=re.MULTILINE)
+    return _RE_STRIKE.sub(repl, text)
 
 
 def _lower_headings(text):
     def repl(m):
         return '#' + m.group(1) + m.group(2) + '\n'
 
-    return re.sub(r'^(#+)( +.*?)\n', repl, text, flags=re.MULTILINE)
+    return _RE_HEADING.sub(repl, text)
 
 
 def _safe_lists(text):
     # add new line before a list block
-    list_pattern = re.compile(r'^ *(\*|-|\d+\.) +(.*)')
-
     new_text = ''
 
     started = False
     for line in text.split('\n'):
-        numbered_list = list_pattern.match(line)
+        numbered_list = _RE_LISTS.match(line)
         if numbered_list is not None:
             if not started:
                 started = True
@@ -213,8 +153,8 @@ def _replace_anki_mathjax(text):
     def repl(m):
         return f'<anki-mathjax>{m.group(1)}</anki-mathjax>'
 
-    text = re.sub(r'\$\$(.*?)\$\$', repl_block, text)
-    return re.sub(r'\$(.*?)\$', repl, text)
+    text = _RE_MATH_BLOCK.sub(repl_block, text)
+    return _RE_MATH.sub(repl, text)
 
 
 def _replace_mathjax(text):
@@ -224,51 +164,28 @@ def _replace_mathjax(text):
     def repl(m):
         return f'\\({m.group(1)}\\)'
 
-    text = re.sub(r'<anki-mathjax block="true">(.*?)</anki-mathjax>', repl_block, text)
-    return re.sub(r'<anki-mathjax>(.*?)</anki-mathjax>', repl, text)
+    text = _RE_MATH_ANKI_BLOCK.sub(repl_block, text)
+    return _RE_MATH_ANKI.sub(repl, text)
 
 
 def _replace_callout(text):
     def repl(m):
-        key = m.group(1) if m.group(1) in CSS_CALLOUT_BODY_COLORS else 'info'
+        c, ch, cb = settings.STYLES.get_callout(m.group(1))
 
-        header_name = CSS_CALLOUT_HEADER.name
-        body_name = CSS_CALLOUT_BODY.name
+        buffer = f'<div class="{c}">\n'
+        buffer += f'<div class="{ch}">\n {m.group(2)} \n</div>\n'
+        buffer += f'<div class="{cb}">\n <p>{m.group(3)}</p>\n</div>\n'
+        buffer += '</div>\n'
+        return buffer
 
-        header_style = CSS_CALLOUT_HEADER_COLORS[key]
-        body_style = CSS_CALLOUT_BODY_COLORS[key]
-
-        callout = f'<div class="{CSS_CALLOUT.name}">'
-        callout += f'<div class="{header_name}" style="{header_style}">{m.group(2)}</div>'
-        callout += f'<div class="{body_name}" style="{body_style}"><p>{m.group(3)}</div>'
-        callout += '</div>'
-        return callout
-    return re.sub(r'<blockquote>\s*<p>\[!(\w+)] *(.*)([\s\S]*)</blockquote>', repl, text, flags=re.MULTILINE)
-
-
-def _replace_callout1(text, web):
-    def repl(m):
-        key = m.group(1) if m.group(1) in CSS_CALLOUT_BODY_COLORS else 'info'
-        header_style = CSS_CALLOUT_HEADER_COLORS[key]
-        body_style = CSS_CALLOUT_BODY_COLORS[key]
-
-        body_text = text_to_html(m.group(3), web)
-
-        callout = f'<div class="{CSS_CALLOUT.name}">'
-        callout += f'<div class="{CSS_CALLOUT_HEADER.name}" style="{header_style}">{m.group(2)}</div>'
-        callout += f'<div class="{CSS_CALLOUT_BODY.name}" style="{body_style}">{body_text}</div>'
-        callout += '</div>'
-
-        return callout
-
-    return re.sub(r'> *\[!(\w+)] +(.*?)\n((?:> *.*\n)+)', repl, text)
+    return _RE_CALLOUT.sub(repl, text)
 
 
 def _replace_highlight(text):
     def repl(m):
-        return f'<span class="{CSS_HIGHLIGHT.name}">{m.group(1)}</span>'
+        return f'<span class="{settings.STYLES[".highlight"]}">{m.group(1)}</span>'
 
-    return re.sub(r'==(.*?)==', repl, text)
+    return _RE_HIGHLIGHT.sub(repl, text)
 
 
 def _replace_link(text):
@@ -282,6 +199,6 @@ def _replace_link(text):
         else:
             link = link.split('/')[-1]  # name, split on folders
 
-        return f'<span class="{CSS_WIKILINK.name}">{link}</span>'
+        return f'<span class="{settings.STYLES[".wikilink"]}">{link}</span>'
 
-    return re.sub(r'\[\[(.*?)]]', repl, text)
+    return _RE_LINK.sub(repl, text)

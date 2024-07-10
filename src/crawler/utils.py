@@ -45,7 +45,8 @@ RE_HEADING = re_heading(r'.+?')
 RE_ANKI_HEADING = re_heading('Anki Cards')
 # Target: #anki/DECK/TAG/SUB_TAGS
 # Group: DECK and TAG/SUB_TAGS, used to determine the Anki deck and Note tags
-RE_ANKI_TAG = re.compile(r'#anki/((\S+?)/\S.+)')
+RE_MAIN_ANKI_TAG = re.compile(r'#anki/((?P<deck>\S+?)/\S.+)')
+RE_ANKI_TAG = re.compile(r'#anki/(.+?)\s')
 # Target: NUMBER. QUESTION TEXT
 # Group: returns the text of the question
 RE_NOTE_BODY = re.compile(r'(?:^|\n\s*)\d+\. +(.+)')  # re.compile(r'(?<=\n)\s*\d+\. +(.+)')
@@ -153,7 +154,7 @@ def relpath(vault: str, filepath: str):
 
 
 def is_anki_file(text: str) -> Tuple[bool, str]:
-    anki_tag = RE_ANKI_TAG.search(text)
+    anki_tag = RE_MAIN_ANKI_TAG.search(text)
     if anki_tag is None:
         return False, 'anki tag is missing or invalid'
 

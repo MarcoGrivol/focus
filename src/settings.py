@@ -15,34 +15,16 @@ class Styles:
         flags=re.MULTILINE
     )
     _callout_types = ('info', 'note', 'warning', 'error', 'danger')
-    _required_styles = [
-        'blockquote',
-        'table',
-        'th',
-        'td',
-        'strong',
-        'em',
-        '.card',
-        '.wikilink',
-        '.callout',
-        f'.callout-header',
-        f'.callout-body',
-        *(f'.callout-header-{ct}' for ct in _callout_types),
-        *(f'.callout-body-{ct}' for ct in _callout_types)
-    ]
-
-    if len(_required_styles) != len(set(_required_styles)):
-        raise AssertionError('Duplicate styles detected')
 
     def __init__(self, default_styles):
         with open(default_styles, 'r', encoding='utf-8') as fp:
             data = fp.read()
 
-        self.css_data = {}
+        self._required_styles = {}
         for css in self._css_pattern.finditer(data):
-            self.css_data[css['name']] = css['body'].strip()
+            self._required_styles[css['name']] = css['body'].strip()
 
-        self._validate_required_styles(self.css_data)
+        self.css_data = self._required_styles
 
     def add_user_styles(self, user_styles):
         with open(user_styles, 'r', encoding='utf-8') as fp:
@@ -75,19 +57,25 @@ class Styles:
             buffer += '}\n'
         return buffer
 
-    def get_callout(self, key: str) -> Tuple[str, str, str]:
-        if key not in self._callout_types:
-            raise TypeError(f'invalid callout type: {key}')
+    def get_callout(self, callout_type: str) -> Tuple[str, str, str]:
+        if callout_type not in self._callout_types:
+            raise TypeError(f'invalid callout type: {callout_type}')
         c = 'callout'
-        ch = f'{c}-header {c}-header-{key}'
-        cb = f'{c}-body {c}-body-{key}'
+        ch = f'{c}-header {c}-header-{callout_type}'
+        cb = f'{c}-body {c}-body-{callout_type}'
         return c, ch, cb
 
+    def get_class(self, key: str, variant=None) -> str | Tuple[str, str, str]:
+        if variant is not None and '.callout' in key:
+            return self.get_callout(variant)
+        if key not in self._required_styles:
+            raise TypeError(f'invalid style: {key}')
+        return key[1:]  # remove the "." prefix
 
-    def __getitem__(self, key) -> str:
-        if not isinstance(key, str):
-            raise KeyError(f'{key} is not a string')
-        return self.css_data[key]
+    def __getitem__(self, item):
+        if item not in self.css_data:
+            raise KeyError(f'invalid style: {item}')
+        return self.css_data[item]
 
 
 VAULT = None

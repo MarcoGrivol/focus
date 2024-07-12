@@ -1,11 +1,7 @@
-﻿import os
-import time
-import webbrowser
+﻿import time
 
 from abc import ABC, abstractmethod
-from typing import Callable, List
-from tkinter import ttk
-from tkinter import messagebox
+from typing import Callable
 
 import printer
 import anki_handler
@@ -14,7 +10,8 @@ from crawler import VaultCrawler, ObsidianNote
 from .utils import *
 from display import messages as mbox
 
-T_RATIO = 0.95
+
+RATIO_T = 0.8
 
 
 class AppController(ABC):
@@ -205,19 +202,26 @@ class ThirdStep(AppStep):
             self._md_notes = args[0]
 
     def build_buttons(self):
-        def continue_cmd(): self.execute(self.parent.func_continue)
+        def continue_cmd():
+            self.execute(self.parent.func_continue, lambda x: 'valid' in x or 'can_edit' in x)
+
+        def preview_cmd():
+            self.execute(printer.webpreview_textual, lambda x: 'selectable' in x)
 
         b_continue = ttk.Button(self._buttons_frame, text='continue', command=continue_cmd)
+        b_preview = ttk.Button(self._buttons_frame, text='preview', command=preview_cmd)
         b_cancel = ttk.Button(self._buttons_frame, text='cancel', command=self.parent.func_cancel)
         b_back = ttk.Button(self._buttons_frame, text='back', command=self.parent.func_back)
         b_refresh = ttk.Button(self._buttons_frame, text='refresh', command=self.refresh)
 
         b_back.grid(column=0, row=0)
         b_refresh.grid(column=1, row=0, sticky='W')
-        b_cancel.grid(column=2, row=0)
-        b_continue.grid(column=3, row=0)
+        b_preview.grid(column=2, row=0, sticky='W')
+        b_cancel.grid(column=3, row=0)
+        b_continue.grid(column=4, row=0)
 
         self._buttons_frame.columnconfigure(1, weight=1)
+        self._buttons_frame.columnconfigure(2, weight=1)
 
     def refresh(self):
         for i in self._contents_frame.winfo_children():
@@ -231,20 +235,29 @@ class ThirdStep(AppStep):
             note = AnkiNote(md_note.deck, front, back, md_note.tags)
             self._anki_entries.append(note)
 
-    def execute(self, func):
+    def execute(self, func: Callable, key=Callable) -> None:
         iid_list = self._treeview.selection()
-        index_list = get_treeview_selection(self._treeview, iid_list, key=lambda x: 'valid' in x, option='tags')
+        index_list = get_treeview_selection(
+            self._treeview,
+            iid_list,
+            key=key, option='tags'
+        )
 
-        selected_entries = [self._anki_entries[self._index_map[iid]] for iid in index_list]
+        selected_entries = [
+            self._anki_entries[self._index_map[iid]] for iid in index_list
+        ]
 
         if len(selected_entries) == 0:
             mbox.Error.invalid_selection()
-            return
+            return None
 
-        ratio_warn = len(list(filter(lambda n: n.exceeds_threshold(T_RATIO), selected_entries))) > 0
-        if ratio_warn > 0:
-            if mbox.Alert.duplicated_notes(ratio_warn, T_RATIO) is not True:
-                return
+        if func == self.parent.func_continue:
+            # alert user about duplicated items going into anki
+            ratio_warn = len(list(filter(lambda n: n.max_t() >= RATIO_T, selected_entries))) > 0
+            if ratio_warn > 0:
+                _continue = mbox.Alert.duplicated_notes(ratio_warn, RATIO_T)
+                if _continue is not True:
+                    return
 
         func(selected_entries)
 
@@ -257,6 +270,7 @@ class ThirdStep(AppStep):
         self._treeview = ttk.Treeview(self._contents_frame, columns=['dt', 'status', 'ratio', 'text'])
 
         ok_id = self._treeview.insert('', 'end', 'can_add', text='Can add')
+        edit_id = self._treeview.insert('', 'end', 'can_edit', text='Can edit')
         dup_id = self._treeview.insert('', 'end', 'duplicated', text='Duplicated')
         err_id = self._treeview.insert('', 'end', 'error', text='Error')
 
@@ -266,14 +280,14 @@ class ThirdStep(AppStep):
         for i, res in enumerate(result):
             print(f'\t ({i + 1})/{len(result)}: {self._md_notes[i].relative_path} response={res}')
 
-            parent, text, values, tags = self.create_treeview(i, res, ok_id, dup_id, err_id)
+            parent, text, values, tags = self.create_treeview(i, res, ok_id, dup_id, err_id, edit_id)
 
             iid = self._treeview.insert(parent, 'end', text=text, values=values, tags=tags)
             self._index_map[iid] = i
 
         self.style_tree()
 
-    def create_treeview(self, i, res, ok_id, dup_id, err_id):
+    def create_treeview(self, i, res, ok_id, dup_id, err_id, edit_id):
         md_note = self._md_notes[i]
         anki_entry = self._anki_entries[i]
 
@@ -284,17 +298,20 @@ class ThirdStep(AppStep):
             status = 'OK'
             parent = ok_id
 
-            tags.append('valid')
-            if anki_entry.exceeds_threshold(T_RATIO):
+            tags.extend(['valid', 'selectable'])
+            if anki_entry.max_t() >= RATIO_T:
                 tags.append('ratio_warn')
 
         else:
             status = anki_entry.status
             if status == 'cannot create note because it is a duplicate':
+                tags.append('selectable')
                 parent = dup_id
-                anki_entry.set_ratio(*anki_entry.calculate_ratio())
-                if anki_entry.exceeds_threshold(T_RATIO):
-                    tags.append('ratio_warn')
+                if RATIO_T <= anki_entry.q_ratio < 1 or RATIO_T <= anki_entry.ans_ratio < 1:
+                    tags.append('can_edit')
+                    parent = edit_id
+                elif anki_entry.min_t() < RATIO_T:
+                    tags.append('new_candidate')
             else:
                 parent = err_id
 
@@ -309,6 +326,8 @@ class ThirdStep(AppStep):
 
     def style_tree(self):
         self._treeview.tag_configure('ratio_warn', background='#ffed7d')
+        self._treeview.tag_configure('can_edit', background='#5175a9')
+        self._treeview.tag_configure('new_candidate', background='#677e53')
 
         self._treeview.heading('#0', text='File')
         self._treeview.heading('dt', text='deck::tag')
@@ -317,7 +336,7 @@ class ThirdStep(AppStep):
         self._treeview.heading('text', text='Text')
 
         self._treeview.column('dt', width=32)
-        self._treeview.column('status', width=32)
+        self._treeview.column('status', width=16)
         self._treeview.column('ratio', width=10, anchor='center')
         self._treeview.column('text', width=48)
 
@@ -353,7 +372,15 @@ class FourthStep(AppStep):
         self._buttons_frame.columnconfigure(0, weight=1)
 
     def build_contents(self):
-        self.results = anki_handler.invoke('addNotes', notes=[note.to_json() for note in self._anki_entries])
+        self.results = []
+        for note in self._anki_entries:
+            if note.duplicate_id is not None:
+                print(f'\t editing note with ID={note.duplicate_id}')
+                r = anki_handler.invoke('updateNoteFields', note=note.to_json(True))
+                r = note.duplicate_id if r is None else r
+            else:
+                r = anki_handler.invoke('addNote', note=note.to_json())
+            self.results.append(r)
 
         treeview = ttk.Treeview(self._contents_frame, columns=['deck', 'tags', 'text'])
 

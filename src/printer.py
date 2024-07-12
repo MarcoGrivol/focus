@@ -1,14 +1,15 @@
-﻿import os
-import re
+﻿import re
 import webbrowser
 import markdown
 
+from html import escape
 from os import path
 from typing import Tuple, List
 
 # focus imports
 import settings
 from crawler import ObsidianNote
+from anki_handler import AnkiNote
 
 
 _RE_CALLOUT = re.compile(r'<blockquote>\s*<p>\[!(\w+)] *(.*)([\s\S]*)</p>\s*</blockquote>')
@@ -26,31 +27,47 @@ _RE_LISTS = re.compile(r'^ *(\*|-|\d+\.) +(.*)')
 
 
 def webpreview(notes: List[ObsidianNote]):
-    filepath = path.join(settings.OUTPUT_DIR, 'tmp.html')
+    buf = ''
+    for i, note in enumerate(notes):
+        buf += f'<h1>note={i + 1}</h1><hr>'
+        front, back = note_to_html(list(note.get_fields()), web=True)
+        buf += front
+        buf += f'<hr class="{settings.STYLES.get_class(".field-delimiter")}">\n'
+        buf += back
+
+    html_head, html_tail = _webpreview_head_tail()
+    buf = html_head + buf + html_tail
+
+    filepath = path.join(settings.OUTPUT_DIR, 'webpreview.html')
     with open(filepath, 'w', encoding='utf-8') as fp:
-        buf = note_to_web(notes)
         fp.write(buf)
+
     webbrowser.open('file:///' + filepath)
 
 
-def note_to_web(notes: List[ObsidianNote]) -> str:
-    html = '<!DOCTYPE html><html lang="en">\n<head>\n'
-    html += '<meta charset="UTF-8">\n'
-    html += '<title>Note preview</title>\n'
-    html += '<style>' + settings.STYLES.to_string() + '</style>\n'
-    html += '<script type="text/javascript" id="MathJax-script" '
-    html += 'async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">'
-    html += '</script>\n'
-    html += '</head>\n<body>\n'
-
+def webpreview_textual(notes: List[AnkiNote]):
+    def _format(text: str) -> str:
+        return re.sub(
+            r'&lt;/(.*?)&gt;',
+            lambda m: '&lt;/%s&gt;<br>' % m.group(1),
+            text,
+            flags=re.MULTILINE
+        )
+    buf = ''
     for i, note in enumerate(notes):
-        html += f'<h1>note={i+1}</h1><hr>'
-        front, back = note_to_html(list(note.get_fields()), web=True)
-        html += front
-        html += back
+        buf += f'<h1>note={i + 1}</h1><hr>'
+        buf += _format(escape(note.question))
+        buf += f'<hr style="{settings.STYLES[".field-delimiter"]}"/>\n'
+        buf += _format(escape(note.answer))
 
-    html += '</body>\n</html>\n'
-    return html
+    html_head, html_tail = _webpreview_head_tail()
+    buf = html_head + buf + html_tail
+
+    filepath = path.join(settings.OUTPUT_DIR, 'webpreview_textual.html')
+    with open(filepath, 'w', encoding='utf-8') as fp:
+        fp.write(buf)
+
+    webbrowser.open('file:///' + filepath)
 
 
 def note_to_html(fields: List[Tuple[str, str]], web=False):
@@ -61,8 +78,8 @@ def note_to_html(fields: List[Tuple[str, str]], web=False):
         back = text_to_html(ans, web=web)
     else:
         for i, (q, ans) in enumerate(fields):
-            front += f'<b>Q{i+1}</b>' + text_to_html(q, True, web)
-            back += f'<b>R{i+1}</b>' + text_to_html(ans, True, web)
+            front += f'<h1>Q{i+1}</h1>' + text_to_html(q, True, web)
+            back += f'<h1>R{i+1}</h1>' + text_to_html(ans, True, web)
     return front, back
 
 
@@ -82,6 +99,19 @@ def text_to_html(text, lower_headings=False, web=False):
     if web:
         text = _replace_mathjax(text)
     return text
+
+
+def _webpreview_head_tail() -> Tuple[str, str]:
+    html = '<!DOCTYPE html><html lang="en">\n<head>\n'
+    html += '<meta charset="UTF-8">\n'
+    html += '<title>Note preview</title>\n'
+    html += '<style>' + settings.STYLES.to_string() + '</style>\n'
+    html += '<script type="text/javascript" id="MathJax-script" '
+    html += 'async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">'
+    html += '</script>\n'
+    html += '</head>\n<body>\n'
+
+    return html, '</body>\n</html>\n'
 
 
 def _replace_strikethrough(text):
@@ -183,7 +213,7 @@ def _replace_callout(text):
 
 def _replace_highlight(text):
     def repl(m):
-        return f'<span class="{settings.STYLES[".highlight"]}">{m.group(1)}</span>'
+        return f'<span class="{settings.STYLES.get_class(".highlight")}">{m.group(1)}</span>'
 
     return _RE_HIGHLIGHT.sub(repl, text)
 
@@ -199,6 +229,6 @@ def _replace_link(text):
         else:
             link = link.split('/')[-1]  # name, split on folders
 
-        return f'<span class="{settings.STYLES[".wikilink"]}">{link}</span>'
+        return f'<span class="{settings.STYLES.get_class(".wikilink")}">{link}</span>'
 
     return _RE_LINK.sub(repl, text)

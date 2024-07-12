@@ -24,6 +24,11 @@ em {
     color: #508d00;
 }
 
+.field-delimiter {
+  border: none;
+  border-top: 1px dotted black;
+}
+
 .card {
     font-family: arial;
     font-size: 20px;

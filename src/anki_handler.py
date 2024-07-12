@@ -60,7 +60,7 @@ def check_for_changes():
 
 
 class AnkiNote:
-    def __init__(self, deck, question, answer, tags):
+    def __init__(self, deck: str, question: str, answer: str, tags: List[str]):
         if not isinstance(deck, str):
             raise TypeError('deck must be a string')
         if not isinstance(tags, list):
@@ -74,27 +74,36 @@ class AnkiNote:
         self.q_ratio = 0
         self.ans_ratio = 0
         self.status = ''
+        self.duplicate_id = None
 
     def is_valid(self):
         return self.status == 'can_add'
 
-    def set_ratio(self, q_ratio, ans_ratio):
-        self.q_ratio = q_ratio
-        self.ans_ratio = ans_ratio
+    def to_json(self, is_update=False):
+        if is_update:
+            if self.duplicate_id is None:
+                raise ValueError(f'cannot edit note without duplicated_id')
+            return {
+                'id': self.duplicate_id,
+                'fields': {
+                    'Question': self.question,
+                    'Answer': self.answer,
+                }
+            }
 
-    def to_json(self):
-        return {
-            'deckName': self.deck,
-            'modelName': MODEL_NAME,
-            'fields': {
-                'Question': self.question,
-                'Answer': self.answer
-            },
-            'tags': self.convert_to_nested_tags()
-        }
+        else:
+            return {
+                'deckName': self.deck,
+                'modelName': MODEL_NAME,
+                'fields': {
+                    'Question': self.question,
+                    'Answer': self.answer
+                },
+                'tags': self.convert_to_nested_tags()
+            }
 
     def calculate_ratio(self):
-        q_max, ans_max = 0, 0
+        q_max, ans_max, dup_id = 0, 0, None
 
         results = find_notes(self.deck, self.convert_to_nested_tags())
         if len(results) == 1:
@@ -110,31 +119,37 @@ class AnkiNote:
             matcher = SequenceMatcher(lambda x: x == ' ', self.answer, ans_b)
             ans_ratio = matcher.ratio()
 
-            if q_ratio > q_max:
+            if q_ratio > q_max and ans_ratio > ans_max:
                 q_max = q_ratio
-            if ans_ratio > ans_max:
+                ans_max = ans_max
+                dup_id = res['noteId']
+            elif q_ratio > q_max:
+                q_max = q_ratio
+            elif ans_ratio > ans_max:
                 ans_max = ans_ratio
 
-        return q_max, ans_max
+        self.q_ratio = q_max
+        self.ans_ratio = ans_max
+        self.duplicate_id = dup_id
 
     def parse_can_add_response(self, response):
         if response['canAdd'] is True:
             self.status = 'can_add'
-            self.set_ratio(*self.calculate_ratio())
         else:
             self.status = response['error']
-            self.set_ratio(0, 0)
-
-    def exceeds_threshold(self, t):
-        if self.q_ratio > t or self.ans_ratio > t:
-            return True
-        return False
+            self.calculate_ratio()
 
     def convert_to_nested_tags(self) -> List[str]:
         anki_tags = []
         for tag in self.tags:
             anki_tags.append(tag.replace('/', '::'))
         return anki_tags
+
+    def max_t(self):
+        return max(self.q_ratio, self.ans_ratio)
+
+    def min_t(self):
+        return min(self.q_ratio, self.ans_ratio)
 
 
 def apply_changes(changes: dict):
@@ -240,7 +255,7 @@ def _get_templates(inline=False):
     templates = {
         'Focus Card 1': {
             'Front': '{{Question}}',
-            'Back': '{{Answer}}'
+            'Back': '{{Question}}\n<hr>\n{{Answer}}'
         }
     }
     if inline:

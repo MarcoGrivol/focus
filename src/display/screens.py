@@ -307,7 +307,7 @@ class ThirdStep(AppStep):
             if status == 'cannot create note because it is a duplicate':
                 tags.append('selectable')
                 parent = dup_id
-                if RATIO_T <= anki_entry.q_ratio < 1 or RATIO_T <= anki_entry.ans_ratio < 1:
+                if anki_entry.can_edit(RATIO_T):
                     tags.append('can_edit')
                     parent = edit_id
                 elif anki_entry.min_t() < RATIO_T:

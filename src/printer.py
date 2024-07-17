@@ -55,7 +55,7 @@ def webpreview_textual(notes: List[AnkiNote]):
         )
     buf = ''
     for i, note in enumerate(notes):
-        buf += f'<h1>note={i + 1}</h1><hr>'
+        buf += f'<h1>note={i + 1} dupID={note.duplicate_id}</h1><hr>'
         buf += _format(escape(note.question))
         buf += f'<hr style="{settings.STYLES[".field-delimiter"]}"/>\n'
         buf += _format(escape(note.answer))

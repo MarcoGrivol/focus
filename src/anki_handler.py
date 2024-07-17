@@ -121,7 +121,7 @@ class AnkiNote:
 
             if q_ratio > q_max and ans_ratio > ans_max:
                 q_max = q_ratio
-                ans_max = ans_max
+                ans_max = ans_ratio
                 dup_id = res['noteId']
             elif q_ratio > q_max:
                 q_max = q_ratio
@@ -150,6 +150,17 @@ class AnkiNote:
 
     def min_t(self):
         return min(self.q_ratio, self.ans_ratio)
+
+    def can_edit(self, t):
+        if self.duplicate_id is None:
+            return False
+        if self.max_t() == self.min_t() == 1:
+            return False
+        if self.max_t() == 1 and self.min_t() != 1:
+            return True
+        if t <= self.q_ratio < 1 or t <= self.ans_ratio < 1:
+            return True
+        return False
 
 
 def apply_changes(changes: dict):

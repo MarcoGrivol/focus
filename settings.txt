@@ -1,3 +1,0 @@
-﻿VAULT=C:\mine\vaults\projeto_medicina
-PROFILE=comvest
-OUTPUT_DIR=C:\mine\cs\repos\focus\out

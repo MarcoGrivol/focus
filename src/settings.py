@@ -1,6 +1,7 @@
 ﻿import re
 import os
 
+from pathlib import Path
 from os import path
 from typing import Iterable, Tuple
 
@@ -104,8 +105,8 @@ def _update_vault(data: str):
     if dirpath is None:
         raise ValueError('"VAULT" must be specified in settings.txt')
 
-    dirpath = dirpath.group(1)
-    if not path.isdir(dirpath):
+    dirpath = Path(dirpath.group(1)).expanduser()
+    if not dirpath.is_dir():
         raise NotADirectoryError(dirpath)
 
     global VAULT
@@ -126,9 +127,9 @@ def _update_output_dir(data: str):
     if dirpath is None:
         out = _DEFAULT_OUTPUT_DIR
     else:
-        out = path.normcase(dirpath.group(1))
+        out = Path(dirpath.group(1)).expanduser()
 
-    if not path.isdir(out):
+    if not out.is_dir():
         os.mkdir(out)
 
     global OUTPUT_DIR

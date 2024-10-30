@@ -31,7 +31,7 @@ def invoke(action, **params):
 def startup():
     result = invoke('getProfiles')
     if settings.PROFILE not in result:
-        raise ValueError(f'{settings.PROFILE} not found in getProfiles result')
+        raise ValueError(f'"{settings.PROFILE}" not found in getProfiles result={result}')
     result = invoke('loadProfile', name=settings.PROFILE)
     if not result:
         raise ValueError(f'unable to load {settings.PROFILE}')
